@@ -1,0 +1,24 @@
+# Local editor and OS noise
+*~
+*.swp
+.DS_Store
+
+# Generated backups and caches
+*.backup-*
+**/__pycache__/
+**/.cache/
+**/.git/
+home/.config/fcitx5/conf/cached_layouts
+
+# Runtime state and secrets should not live in this repo
+home/.config/Code/
+home/.config/warp-terminal/
+home/.local/state/
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Machine-local overrides
+/local/
+*.local

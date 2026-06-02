@@ -1,0 +1,8 @@
+# Doom Emacs language servers and formatters installed under ~/.local.
+typescript
+typescript-language-server
+vscode-langservers-extracted
+stylelint
+prettier
+bash-language-server
+yaml-language-server

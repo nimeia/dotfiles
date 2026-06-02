@@ -1,0 +1,115 @@
+# Core session
+greetd
+tuigreet
+xwayland
+x11-utils
+x11-xserver-utils
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+xdg-utils
+
+# Display configuration
+wlr-randr
+wdisplays
+kanshi
+nwg-displays
+
+# Niri desktop helpers
+waybar
+wlogout
+fuzzel
+mako-notifier
+swaylock
+grim
+slurp
+wl-clipboard
+brightnessctl
+playerctl
+
+# Audio
+pipewire
+pipewire-pulse
+wireplumber
+libspa-0.2-bluetooth
+
+# Bluetooth
+bluez
+bluetooth
+blueman
+bluez-obexd
+rfkill
+
+# Chinese input
+fcitx5
+fcitx5-chinese-addons
+fcitx5-config-qt
+fcitx5-frontend-all
+fcitx5-table
+
+# Fonts
+fonts-jetbrains-mono
+fonts-firacode
+fonts-hack
+fonts-cascadia-code
+fonts-noto-cjk
+fonts-noto-color-emoji
+
+# Terminals and shells
+tmux
+foot
+alacritty
+zsh
+fish
+
+# Development tools
+git
+curl
+wget
+rsync
+jq
+build-essential
+python3-venv
+python3-pip
+python3-gi
+gir1.2-gtk-4.0
+nodejs
+npm
+neovim
+ripgrep
+fd-find
+cargo
+rustc
+
+# Emacs and Doom Emacs support
+emacs-pgtk
+cmake
+libtool
+libtool-bin
+libvterm-dev
+sqlite3
+shellcheck
+editorconfig
+aspell
+aspell-en
+fonts-symbola
+tidy
+libxml2-utils
+shfmt
+clang-format
+clangd
+black
+pyflakes3
+isort
+pipenv
+python3-pytest
+python3-nose
+discount
+node-js-beautify
+python3-pylsp
+python3-pylsp-black
+
+# Optional, but useful for apps such as Warp Terminal
+policykit-1-gnome
+gnome-keyring
+libsecret-tools
+seahorse
