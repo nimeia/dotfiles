@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: niri-overview-wallpaper [--loop]
+
+Set a dedicated swww wallpaper namespace for niri's overview backdrop.
+EOF
+}
+
+loop=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --loop)
+            loop=1
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            printf 'niri-overview-wallpaper: unknown argument: %s\n' "$1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+namespace="overview"
+wallpaper="${NIRI_OVERVIEW_WALLPAPER:-$HOME/.local/share/wallpapers/niri-overview.png}"
+fallback_wallpaper="${WALLPAPER_FALLBACK:-$HOME/.local/share/wallpapers/default.png}"
+fallback_color="${NIRI_OVERVIEW_FALLBACK_COLOR:-0f172aff}"
+interval="${NIRI_OVERVIEW_INTERVAL:-3600}"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    printf 'niri-overview-wallpaper: WAYLAND_DISPLAY is not set\n' >&2
+    exit 1
+fi
+
+exec 9>"$runtime_dir/niri-overview-wallpaper.lock"
+if ! flock -n 9; then
+    exit 0
+fi
+
+start_swww_overview() {
+    if swww query --namespace "$namespace" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    swww-daemon --namespace "$namespace" --quiet >/dev/null 2>&1 &
+
+    local _
+    for _ in {1..50}; do
+        if swww query --namespace "$namespace" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.1
+    done
+
+    printf 'niri-overview-wallpaper: failed to start swww-daemon namespace %s\n' "$namespace" >&2
+    return 1
+}
+
+set_overview_wallpaper() {
+    if [ -f "$wallpaper" ]; then
+        swww img --namespace "$namespace" "$wallpaper" --resize crop --transition-type none
+    elif [ -f "$fallback_wallpaper" ]; then
+        swww img --namespace "$namespace" "$fallback_wallpaper" --resize crop --transition-type none
+    else
+        swww clear --namespace "$namespace" "$fallback_color"
+    fi
+}
+
+start_swww_overview
+
+while :; do
+    set_overview_wallpaper
+    [ "$loop" -eq 1 ] || break
+    sleep "$interval"
+done

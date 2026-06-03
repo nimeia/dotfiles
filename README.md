@@ -10,7 +10,7 @@
 - fuzzel、mako、ghostty、NvChad 配置
 - tmux + Oh my tmux 本地覆盖配置
 - Emacs pgtk + Doom Emacs 私人配置
-- 自定义脚本：`niri-shortcuts-grid`、`niri-quit`、`wallpaper-random`、`niri-overview-wallpaper`
+- 自定义脚本：`niri-shortcuts-grid`、`niri-settings-menu`、`wallpaper-random`、`niri-overview-wallpaper`
 - niri overview 专用背景图
 
 ## 目录
@@ -45,6 +45,16 @@ cd ~/dotfiles
 ```bash
 ./install.sh --external
 ```
+
+只安装/更新自动壁纸集合：
+
+```bash
+./install.sh --wallpapers
+```
+
+默认会把 Catppuccin 壁纸集合浅克隆到
+`~/Pictures/Wallpapers/catppuccin-wallpapers`，`wallpaper-random` 会递归扫描
+`~/Pictures/Wallpapers`。
 
 从源码构建并安装 niri：
 
@@ -81,6 +91,15 @@ cd ~/dotfiles
 - `/etc/greetd/config.toml`
 - `/usr/share/wayland-sessions/niri.desktop`
 - `/usr/local/bin/niri-session`
+
+也可以在 niri 已经准备好的机器上使用：
+
+```bash
+./install.sh --all
+```
+
+它会依次执行 packages、external、用户配置、系统模板和 Doom 配置。niri 源码构建仍然单独使用
+`./install.sh --niri-source`，因为它可能需要按机器选择 ref/portal 选项。
 
 现有文件会先移动到 `~/.dotfiles-backup/<timestamp>/`。
 

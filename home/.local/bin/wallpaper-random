@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: wallpaper-random [--loop] [wallpaper-dir]
+
+Set a random wallpaper with swww. Defaults to recursively scanning
+~/Pictures/Wallpapers and falls back to ~/.local/share/wallpapers/default.png,
+then to a solid color.
+EOF
+}
+
+loop=0
+wallpaper_dir="${WALLPAPER_DIR:-$HOME/Pictures/Wallpapers}"
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --loop)
+            loop=1
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            wallpaper_dir="$1"
+            ;;
+    esac
+    shift
+done
+
+fallback_dir="${WALLPAPER_FALLBACK_DIR:-$HOME/.local/share/wallpapers}"
+fallback_color="${WALLPAPER_FALLBACK_COLOR:-111827ff}"
+interval="${WALLPAPER_INTERVAL:-1800}"
+max_depth="${WALLPAPER_MAX_DEPTH:-4}"
+transition="${WALLPAPER_TRANSITION:-random}"
+transition_duration="${WALLPAPER_TRANSITION_DURATION:-1.2}"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    printf 'wallpaper-random: WAYLAND_DISPLAY is not set\n' >&2
+    exit 1
+fi
+
+exec 9>"$runtime_dir/wallpaper-random.lock"
+if ! flock -n 9; then
+    exit 0
+fi
+
+start_swww() {
+    if swww query >/dev/null 2>&1; then
+        return 0
+    fi
+
+    swww-daemon --quiet >/dev/null 2>&1 &
+
+    local _
+    for _ in {1..50}; do
+        if swww query >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.1
+    done
+
+    printf 'wallpaper-random: failed to start swww-daemon\n' >&2
+    return 1
+}
+
+list_images() {
+    local dir
+    for dir in "$wallpaper_dir" "$fallback_dir"; do
+        [ -d "$dir" ] || continue
+        find -L "$dir" -maxdepth "$max_depth" -type f \
+            \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.gif' \) \
+            ! -name 'niri-overview.*'
+    done
+}
+
+choose_image() {
+    list_images | shuf -n 1
+}
+
+set_wallpaper() {
+    local image
+    image="$(choose_image)"
+
+    if [ -n "$image" ]; then
+        swww img "$image" \
+            --resize crop \
+            --transition-type "$transition" \
+            --transition-duration "$transition_duration"
+    else
+        swww clear "$fallback_color"
+    fi
+}
+
+start_swww
+
+while :; do
+    set_wallpaper
+    [ "$loop" -eq 1 ] || break
+    sleep "$interval"
+done

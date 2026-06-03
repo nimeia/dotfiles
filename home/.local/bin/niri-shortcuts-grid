@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+terminal="${TERMINAL:-ghostty}"
+
+show_shortcuts() {
+    cat <<'EOF'
+Niri Shortcuts
+
+Mod+Enter / Mod+T     Open terminal
+Mod+E                 Open Yazi
+Mod+I                 Open settings menu
+Mod+D / Mod+Tab       Toggle overview
+Mod+Shift+/           Show this panel
+Mod+B                 Toggle Waybar
+Mod+Shift+Q           Power menu
+
+Mod+H/J/K/L           Focus left/down/up/right
+Mod+Shift+H/J/K/L     Move window left/down/up/right
+Mod+Ctrl+H/L          Focus monitor left/right
+Mod+R                 Switch column width
+Mod+F                 Maximize column
+Mod+Shift+F           Fullscreen window
+Mod+Q                 Close window
+
+Press Enter to close.
+EOF
+}
+
+if command -v "$terminal" >/dev/null 2>&1; then
+    exec "$terminal" --class=dev.sakura.NiriShortcuts -e sh -lc 'cat <<'\''EOF'\''
+Niri Shortcuts
+
+Mod+Enter / Mod+T     Open terminal
+Mod+E                 Open Yazi
+Mod+I                 Open settings menu
+Mod+D / Mod+Tab       Toggle overview
+Mod+Shift+/           Show this panel
+Mod+B                 Toggle Waybar
+Mod+Shift+Q           Power menu
+
+Mod+H/J/K/L           Focus left/down/up/right
+Mod+Shift+H/J/K/L     Move window left/down/up/right
+Mod+Ctrl+H/L          Focus monitor left/right
+Mod+R                 Switch column width
+Mod+F                 Maximize column
+Mod+Shift+F           Fullscreen window
+Mod+Q                 Close window
+
+Press Enter to close.
+EOF
+read _'
+fi
+
+show_shortcuts

@@ -3,6 +3,24 @@ set -euo pipefail
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 backup_dir="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
+export PATH="$HOME/.local/bin:$PATH"
+
+usage() {
+    cat <<'EOF'
+Usage: ./install.sh [--packages|--external|--wallpapers|--niri-source|--system|--doom|--all]
+
+With no arguments, installs user dotfile symlinks and local helper scripts.
+
+Options:
+  --packages     Install apt packages, npm globals, rust-analyzer, and shims.
+  --external     Install external tools: Chrome, Yazi, swww, fonts, wallpapers.
+  --wallpapers   Install or update the Catppuccin wallpaper collection only.
+  --niri-source  Build/install niri from source; extra args are forwarded.
+  --system       Install user files and system greetd/niri session templates.
+  --doom         Install user files and Doom Emacs packages/env.
+  --all          Install packages, external tools, user files, system files, Doom.
+EOF
+}
 
 link_item() {
     local rel="$1"
@@ -47,6 +65,7 @@ install_user() {
         .config/waybar \
         .config/wlogout \
         .local/share/applications/google-chrome.desktop \
+        .local/share/wallpapers/default.png \
         .local/share/wallpapers/niri-overview.png; do
         link_item "$item"
     done
@@ -131,8 +150,8 @@ install_npm_globals() {
     fi
 
     mkdir -p -- "$HOME/.local"
-    xargs -r -a <(grep -vE '^\s*(#|$)' "$repo_dir/packages/npm-global.txt") \
-        npm install -g --prefix "$HOME/.local"
+    grep -vE '^\s*(#|$)' "$repo_dir/packages/npm-global.txt" |
+        xargs -r npm install -g --prefix "$HOME/.local"
 }
 
 install_rust_analyzer() {
@@ -157,6 +176,9 @@ install_rust_analyzer() {
 install_python_tool_shims() {
     mkdir -p -- "$HOME/.local/bin"
 
+    if command -v fdfind >/dev/null 2>&1; then
+        ln -sfn -- "$(command -v fdfind)" "$HOME/.local/bin/fd"
+    fi
     if command -v pyflakes3 >/dev/null 2>&1; then
         ln -sfn -- "$(command -v pyflakes3)" "$HOME/.local/bin/pyflakes"
     fi
@@ -167,7 +189,7 @@ install_python_tool_shims() {
 
 install_packages() {
     sudo apt update
-    sudo xargs -r -a <(grep -vE '^\s*(#|$)' "$repo_dir/packages/apt.txt") apt install -y
+    grep -vE '^\s*(#|$)' "$repo_dir/packages/apt.txt" | xargs -r sudo apt install -y
     install_npm_globals
     install_rust_analyzer
     install_python_tool_shims
@@ -183,12 +205,23 @@ install_external() {
     "$repo_dir/scripts/install-external.sh"
 }
 
+install_wallpapers() {
+    "$repo_dir/scripts/install-external.sh" --wallpapers-only
+}
+
 case "${1:-}" in
+    -h | --help)
+        usage
+        exit 0
+        ;;
     --packages)
         install_packages
         ;;
     --external)
         install_external
+        ;;
+    --wallpapers)
+        install_wallpapers
         ;;
     --niri-source)
         shift
@@ -204,12 +237,18 @@ case "${1:-}" in
         ;;
     --all)
         install_packages
+        install_external
         install_user
         install_system
         run_doom_install
         ;;
-    *)
+    "")
         install_user
+        ;;
+    *)
+        printf 'unknown option: %s\n\n' "$1" >&2
+        usage >&2
+        exit 2
         ;;
 esac
 

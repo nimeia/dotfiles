@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+menu_cmd="${MENU:-fuzzel --dmenu --prompt Settings: }"
+
+choose() {
+    if command -v fuzzel >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        printf '%s\n' "$@" | sh -c "$menu_cmd"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
+selection="$(choose \
+    'Reload niri config' \
+    'Restart Waybar' \
+    'Restart wallpaper' \
+    'Open Fcitx config' \
+    'Open power menu')"
+
+case "$selection" in
+    'Reload niri config')
+        niri msg action load-config-file
+        ;;
+    'Restart Waybar')
+        systemctl --user restart waybar.service
+        ;;
+    'Restart wallpaper')
+        systemctl --user restart wallpaper-random.service niri-overview-wallpaper.service
+        ;;
+    'Open Fcitx config')
+        fcitx5-configtool >/dev/null 2>&1 &
+        ;;
+    'Open power menu')
+        wlogout --buttons-per-row 5 --column-spacing 12 --row-spacing 12 --margin 275
+        ;;
+    '')
+        exit 0
+        ;;
+    *)
+        printf 'unknown selection: %s\n' "$selection" >&2
+        exit 2
+        ;;
+esac

@@ -29,7 +29,7 @@ copy_local_bin_if_exists() {
 
 copy_dir .config/niri --exclude '*.backup-*'
 copy_dir .config/waybar --exclude '*.backup-*' --exclude 'config.jsonc' --exclude 'scripts/playerctl-status-new'
-copy_dir .config/fcitx5 --exclude '*.backup-*' --exclude 'conf/cached_layouts'
+copy_dir .config/fcitx5 --exclude '*.backup-*' --exclude 'conf/cached_layouts' --exclude 'conf/chttrans.conf'
 copy_dir .config/doom --exclude '.local/' --exclude '*.elc'
 copy_dir .config/fuzzel --exclude '*.backup-*'
 copy_dir .config/wlogout --exclude '*.backup-*'
@@ -53,7 +53,8 @@ copy_file_if_exists .gitconfig
 
 install -D -m 0644 /dev/null "$repo_dir/home/.bashrc"
 if [ -f "$HOME/.bashrc" ]; then
-    sed '/^export HTTP_PROXY=/d;/^export HTTPS_PROXY=/d' "$HOME/.bashrc" >"$repo_dir/home/.bashrc"
+    sed '/^export HTTP_PROXY=/d;/^export HTTPS_PROXY=/d;/^export ALL_PROXY=/d;/^export http_proxy=/d;/^export https_proxy=/d;/^export all_proxy=/d' \
+        "$HOME/.bashrc" >"$repo_dir/home/.bashrc"
 fi
 
 mkdir -p -- "$repo_dir/home/.local/bin"
@@ -68,10 +69,12 @@ for item in "$repo_dir"/home/.local/bin/*; do
     chmod +x "$item"
 done
 
-if [ -f "$HOME/.local/share/wallpapers/niri-overview.png" ]; then
-    install -D -m 0644 "$HOME/.local/share/wallpapers/niri-overview.png" \
-        "$repo_dir/home/.local/share/wallpapers/niri-overview.png"
-fi
+for wallpaper in default.png niri-overview.png; do
+    if [ -f "$HOME/.local/share/wallpapers/$wallpaper" ]; then
+        install -D -m 0644 "$HOME/.local/share/wallpapers/$wallpaper" \
+            "$repo_dir/home/.local/share/wallpapers/$wallpaper"
+    fi
+done
 
 if [ -r /etc/greetd/config.toml ]; then
     install -D -m 0644 /etc/greetd/config.toml "$repo_dir/system/etc/greetd/config.toml"

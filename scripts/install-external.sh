@@ -2,15 +2,19 @@
 set -euo pipefail
 
 force=0
+wallpapers_only=0
+export PATH="$HOME/.local/bin:$PATH"
 
 usage() {
     cat <<'EOF'
-Usage: scripts/install-external.sh [--force]
+Usage: scripts/install-external.sh [--force] [--wallpapers-only]
 
 Installs external or non-apt items used by this dotfiles setup:
   - Google Chrome from the official .deb
   - Yazi from the latest GitHub release
-  - swww via cargo
+  - swww from the latest tagged GitHub source release
+  - Symbols Nerd Font from the latest Nerd Fonts release
+  - Catppuccin wallpaper collection under ~/Pictures/Wallpapers
   - Ghostty from apt when available
   - libnotify-bin and orca from apt
 
@@ -23,6 +27,9 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --force)
             force=1
+            ;;
+        --wallpapers-only)
+            wallpapers_only=1
             ;;
         -h | --help)
             usage
@@ -66,12 +73,17 @@ install_apt_dependencies() {
     local required=(
         ca-certificates
         curl
+        fontconfig
+        git
         gzip
         jq
+        liblz4-dev
         libnotify-bin
+        libwayland-dev
         orca
         tar
         unzip
+        wayland-protocols
         xdg-utils
     )
 
@@ -172,11 +184,79 @@ install_swww() {
 
     have cargo || die "cargo is required to install swww; run ./install.sh --packages first"
 
-    log "install swww with cargo"
-    cargo install --locked swww
+    local ref="${SWWW_REF:-v0.11.2}"
+
+    log "install swww from GitHub source: $ref"
+    cargo install --locked --git https://github.com/LGFae/swww.git --tag "$ref" swww
+    cargo install --locked --git https://github.com/LGFae/swww.git --tag "$ref" swww-daemon
     mkdir -p -- "$HOME/.local/bin"
     ln -sfn -- "$HOME/.cargo/bin/swww" "$HOME/.local/bin/swww"
     ln -sfn -- "$HOME/.cargo/bin/swww-daemon" "$HOME/.local/bin/swww-daemon"
+}
+
+install_symbols_nerd_font() {
+    if have fc-match &&
+        fc-match -f '%{family}\n' 'Symbols Nerd Font Mono' | grep -qx 'Symbols Nerd Font Mono' &&
+        [ "$force" -eq 0 ]; then
+        log "Symbols Nerd Font already installed"
+        return
+    fi
+
+    local url
+    local tmp
+    local archive
+    local install_dir
+
+    url="$(github_latest_asset_url "ryanoasis/nerd-fonts" 'NerdFontsSymbolsOnly\.tar\.xz$')"
+    [ -n "$url" ] || die "could not find a NerdFontsSymbolsOnly release asset"
+
+    tmp="$(mktemp -d)"
+    archive="$tmp/NerdFontsSymbolsOnly.tar.xz"
+    install_dir="$HOME/.local/share/fonts/NerdFontsSymbolsOnly"
+
+    log "download and install Symbols Nerd Font"
+    download "$url" "$archive"
+    rm -rf -- "$install_dir"
+    mkdir -p -- "$install_dir"
+    tar -xJf "$archive" -C "$install_dir"
+    if have fc-cache; then
+        fc-cache -f "$HOME/.local/share/fonts"
+    fi
+    rm -rf -- "$tmp"
+}
+
+install_wallpaper_collection() {
+    have git || die "git is required to install wallpapers; run ./install.sh --packages first"
+
+    local repo="${WALLPAPER_REPO_URL:-https://github.com/zhichaoh/catppuccin-wallpapers.git}"
+    local target="${WALLPAPER_REPO_DIR:-$HOME/Pictures/Wallpapers/catppuccin-wallpapers}"
+    local sparse_paths=()
+    read -r -a sparse_paths <<<"${WALLPAPER_SPARSE_PATHS:-gradients landscapes minimalistic misc patterns waves}"
+
+    apply_wallpaper_sparse_checkout() {
+        if ! git -C "$target" sparse-checkout set "${sparse_paths[@]}"; then
+            warn "sparse checkout failed; falling back to full checkout"
+            git -C "$target" sparse-checkout disable
+        fi
+    }
+
+    if [ -d "$target/.git" ]; then
+        log "update wallpaper collection: $target"
+        git -C "$target" pull --ff-only
+        apply_wallpaper_sparse_checkout
+        return
+    fi
+
+    if [ -e "$target" ]; then
+        warn "wallpaper target exists and is not a git checkout: $target"
+        warn "leaving it untouched; set WALLPAPER_REPO_DIR to another path or move it aside"
+        return
+    fi
+
+    log "clone Catppuccin wallpaper collection"
+    mkdir -p -- "$(dirname -- "$target")"
+    git clone --depth 1 --filter=blob:none --sparse "$repo" "$target"
+    apply_wallpaper_sparse_checkout
 }
 
 check_niri() {
@@ -190,7 +270,7 @@ check_niri() {
 
 check_result() {
     log "external dependency status"
-    for cmd in google-chrome-stable ghostty yazi ya swww swww-daemon notify-send orca; do
+    for cmd in google-chrome-stable ghostty yazi ya swww swww-daemon notify-send orca direnv; do
         if have "$cmd"; then
             printf '  ok      %s -> %s\n' "$cmd" "$(command -v "$cmd")"
         else
@@ -203,12 +283,34 @@ check_result() {
     else
         printf '  missing niri\n'
     fi
+
+    if have fc-match &&
+        fc-match -f '%{family}\n' 'Symbols Nerd Font Mono' | grep -qx 'Symbols Nerd Font Mono'; then
+        printf '  ok      Symbols Nerd Font Mono\n'
+    else
+        printf '  missing Symbols Nerd Font Mono\n'
+    fi
+
+    local wallpaper_target="${WALLPAPER_REPO_DIR:-$HOME/Pictures/Wallpapers/catppuccin-wallpapers}"
+    if [ -d "$wallpaper_target/.git" ]; then
+        printf '  ok      wallpapers -> %s\n' "$wallpaper_target"
+    else
+        printf '  missing wallpapers -> %s\n' "$wallpaper_target"
+    fi
 }
+
+if [ "$wallpapers_only" -eq 1 ]; then
+    install_wallpaper_collection
+    check_result
+    exit 0
+fi
 
 require_x86_64
 install_apt_dependencies
 install_chrome
 install_yazi
 install_swww
+install_symbols_nerd_font
+install_wallpaper_collection
 check_niri
 check_result

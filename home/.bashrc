@@ -118,7 +118,7 @@ if ! shopt -oq posix; then
 fi
 
 # >>> Codex installer >>>
-export PATH="/home/sakura/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 # <<< Codex installer <<<
 
 # Doom Emacs

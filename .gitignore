@@ -9,6 +9,7 @@
 **/.cache/
 **/.git/
 home/.config/fcitx5/conf/cached_layouts
+home/.config/fcitx5/conf/chttrans.conf
 
 # Runtime state and secrets should not live in this repo
 home/.config/Code/
@@ -22,3 +23,13 @@ home/.local/state/
 # Machine-local overrides
 /local/
 *.local
+
+# Tracked helper scripts/assets under the dotfiles home tree.
+!home/.local/
+!home/.local/bin/
+!home/.local/bin/niri-overview-wallpaper
+!home/.local/bin/wallpaper-random
+!home/.local/share/
+!home/.local/share/wallpapers/
+!home/.local/share/wallpapers/default.png
+!home/.local/share/wallpapers/niri-overview.png

@@ -268,8 +268,11 @@ layout {
 // which may be more convenient to use.
 // See the binds section below for more spawn examples.
 
-// This line starts waybar, a commonly used bar for Wayland compositors.
-spawn-at-startup "waybar"
+// Waybar is started by the packaged systemd user unit when graphical-session.target is active.
+// Keeping it here as well starts a duplicate bar.
+
+// Fcitx5 input method daemon.
+spawn-at-startup "fcitx5"
 
 // Start animated wallpaper rotation. Put images in ~/Pictures/Wallpapers.
 spawn-sh-at-startup "wallpaper-random --loop"

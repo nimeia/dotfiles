@@ -7,6 +7,7 @@ x11-xserver-utils
 xdg-desktop-portal
 xdg-desktop-portal-gtk
 xdg-utils
+desktop-file-utils
 
 # Display configuration
 wlr-randr
@@ -67,6 +68,7 @@ curl
 wget
 rsync
 jq
+direnv
 build-essential
 python3-venv
 python3-pip
