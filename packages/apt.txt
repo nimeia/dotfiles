@@ -89,6 +89,7 @@ fd-find
 cargo
 rustc
 clang
+pkg-config
 libxcb1-dev
 libxcb-cursor-dev
 

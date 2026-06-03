@@ -61,6 +61,33 @@ have() {
     command -v "$1" >/dev/null 2>&1
 }
 
+retry_cmd() {
+    local attempts="$1"
+    local delay="$2"
+    local status
+    local attempt=1
+    shift 2
+
+    until "$@"; do
+        status=$?
+        if [ "$attempt" -ge "$attempts" ]; then
+            return "$status"
+        fi
+        log "retry $attempt/$attempts failed; waiting ${delay}s: $*"
+        sleep "$delay"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+    done
+}
+
+git_remote() {
+    retry_cmd 5 3 git \
+        -c http.version=HTTP/1.1 \
+        -c http.lowSpeedLimit=1024 \
+        -c http.lowSpeedTime=30 \
+        "$@"
+}
+
 require_x86_64() {
     [ "$(uname -m)" = "x86_64" ] || die "this script currently supports x86_64 only"
 }
@@ -101,10 +128,12 @@ install_apt_dependencies() {
 download() {
     local url="$1"
     local output="$2"
-    curl -fL --retry 3 --connect-timeout 20 -o "$output" "$url"
+    curl -fL --retry 5 --retry-delay 2 --connect-timeout 20 -o "$output" "$url"
 }
 
 set_chrome_as_default() {
+    mkdir -p -- "$HOME/.config"
+
     if have xdg-mime; then
         xdg-mime default google-chrome.desktop text/html || true
         xdg-mime default google-chrome.desktop x-scheme-handler/http || true
@@ -138,7 +167,8 @@ github_latest_asset_url() {
     local repo="$1"
     local pattern="$2"
 
-    curl -fsSL "https://api.github.com/repos/$repo/releases/latest" |
+    curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 20 \
+        "https://api.github.com/repos/$repo/releases/latest" |
         jq -r --arg pattern "$pattern" '[.assets[] | select(.name | test($pattern)) | .browser_download_url][0] // empty'
 }
 
@@ -187,8 +217,9 @@ install_swww() {
     local ref="${SWWW_REF:-v0.11.2}"
 
     log "install swww from GitHub source: $ref"
-    cargo install --locked --git https://github.com/LGFae/swww.git --tag "$ref" swww
-    cargo install --locked --git https://github.com/LGFae/swww.git --tag "$ref" swww-daemon
+    export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
+    retry_cmd 3 5 cargo install --locked --git https://github.com/LGFae/swww.git --tag "$ref" swww
+    retry_cmd 3 5 cargo install --locked --git https://github.com/LGFae/swww.git --tag "$ref" swww-daemon
     mkdir -p -- "$HOME/.local/bin"
     ln -sfn -- "$HOME/.cargo/bin/swww" "$HOME/.local/bin/swww"
     ln -sfn -- "$HOME/.cargo/bin/swww-daemon" "$HOME/.local/bin/swww-daemon"
@@ -234,7 +265,7 @@ install_wallpaper_collection() {
     read -r -a sparse_paths <<<"${WALLPAPER_SPARSE_PATHS:-gradients landscapes minimalistic misc patterns waves}"
 
     apply_wallpaper_sparse_checkout() {
-        if ! git -C "$target" sparse-checkout set "${sparse_paths[@]}"; then
+        if ! git_remote -C "$target" sparse-checkout set "${sparse_paths[@]}"; then
             warn "sparse checkout failed; falling back to full checkout"
             git -C "$target" sparse-checkout disable
         fi
@@ -242,7 +273,7 @@ install_wallpaper_collection() {
 
     if [ -d "$target/.git" ]; then
         log "update wallpaper collection: $target"
-        git -C "$target" pull --ff-only
+        git_remote -C "$target" pull --ff-only
         apply_wallpaper_sparse_checkout
         return
     fi
@@ -255,7 +286,7 @@ install_wallpaper_collection() {
 
     log "clone Catppuccin wallpaper collection"
     mkdir -p -- "$(dirname -- "$target")"
-    git clone --depth 1 --filter=blob:none --sparse "$repo" "$target"
+    git_remote clone --depth 1 --filter=blob:none --sparse "$repo" "$target"
     apply_wallpaper_sparse_checkout
 }
 

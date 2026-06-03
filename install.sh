@@ -24,6 +24,33 @@ Options:
 EOF
 }
 
+retry_cmd() {
+    local attempts="$1"
+    local delay="$2"
+    local status
+    local attempt=1
+    shift 2
+
+    until "$@"; do
+        status=$?
+        if [ "$attempt" -ge "$attempts" ]; then
+            return "$status"
+        fi
+        printf 'retry %s/%s failed; waiting %ss: %s\n' "$attempt" "$attempts" "$delay" "$*"
+        sleep "$delay"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+    done
+}
+
+git_remote() {
+    retry_cmd 5 3 git \
+        -c http.version=HTTP/1.1 \
+        -c http.lowSpeedLimit=1024 \
+        -c http.lowSpeedTime=30 \
+        "$@"
+}
+
 link_item() {
     local rel="$1"
     local src="$repo_dir/home/$rel"
@@ -93,11 +120,11 @@ install_tmux() {
     local upstream="$target/.tmux.conf"
 
     if [ -d "$target/.git" ]; then
-        git -C "$target" pull --ff-only
+        git_remote -C "$target" pull --ff-only
     elif [ -e "$target" ]; then
         printf 'skip Oh my tmux clone; %s exists and is not a git checkout\n' "$target" >&2
     else
-        git clone --single-branch https://github.com/gpakosz/.tmux.git "$target"
+        git_remote clone --single-branch https://github.com/gpakosz/.tmux.git "$target"
     fi
 
     mkdir -p -- "$conf_dir"
@@ -120,11 +147,11 @@ install_doom() {
     local target="$HOME/.config/emacs"
 
     if [ -d "$target/.git" ]; then
-        git -C "$target" pull --ff-only
+        git_remote -C "$target" pull --ff-only
     elif [ -e "$target" ]; then
         printf 'skip Doom clone; %s exists and is not a git checkout\n' "$target" >&2
     else
-        git clone --depth 1 https://github.com/doomemacs/doomemacs "$target"
+        git_remote clone --depth 1 https://github.com/doomemacs/doomemacs "$target"
     fi
 
     mkdir -p -- "$HOME/.local/bin"

@@ -87,6 +87,33 @@ have() {
     command -v "$1" >/dev/null 2>&1
 }
 
+retry_cmd() {
+    local attempts="$1"
+    local delay="$2"
+    local status
+    local attempt=1
+    shift 2
+
+    until "$@"; do
+        status=$?
+        if [ "$attempt" -ge "$attempts" ]; then
+            return "$status"
+        fi
+        log "retry $attempt/$attempts failed; waiting ${delay}s: $*"
+        sleep "$delay"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+    done
+}
+
+git_remote() {
+    retry_cmd 5 3 git \
+        -c http.version=HTTP/1.1 \
+        -c http.lowSpeedLimit=1024 \
+        -c http.lowSpeedTime=30 \
+        "$@"
+}
+
 install_dependencies() {
     local packages=(
         ca-certificates
@@ -117,7 +144,8 @@ resolve_ref() {
     have jq || die "jq is required to resolve the latest xwayland-satellite release"
 
     xwayland_satellite_ref="$(
-        curl -fsSL "https://api.github.com/repos/Supreeeme/xwayland-satellite/releases/latest" |
+        curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 20 \
+            "https://api.github.com/repos/Supreeeme/xwayland-satellite/releases/latest" |
             jq -r '.tag_name // empty'
     )"
 
@@ -130,19 +158,19 @@ prepare_source() {
 
     if [ -d "$source_dir/.git" ]; then
         log "update existing xwayland-satellite source checkout"
-        git -C "$source_dir" fetch --tags --prune origin
+        git_remote -C "$source_dir" fetch --tags --prune origin
     elif [ -e "$source_dir" ]; then
         if [ "$force" -eq 1 ]; then
             log "remove non-git source directory: $source_dir"
             rm -rf -- "$source_dir"
-            git clone "$xwayland_satellite_repo" "$source_dir"
+            git_remote clone "$xwayland_satellite_repo" "$source_dir"
         else
             die "$source_dir exists and is not a git checkout; pass --force to replace it"
         fi
     else
         log "clone xwayland-satellite source"
         mkdir -p -- "$(dirname -- "$source_dir")"
-        git clone "$xwayland_satellite_repo" "$source_dir"
+        git_remote clone "$xwayland_satellite_repo" "$source_dir"
     fi
 
     log "checkout xwayland-satellite ref: $ref"

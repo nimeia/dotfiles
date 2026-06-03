@@ -6,6 +6,7 @@ pycache_dir="$(mktemp -d)"
 trap 'rm -rf -- "$pycache_dir"' EXIT
 
 bash -n \
+    "$repo_dir/bootstrap.sh" \
     "$repo_dir/install.sh" \
     "$repo_dir/sync.sh" \
     "$repo_dir/check.sh" \
@@ -22,6 +23,7 @@ PYTHONPYCACHEPREFIX="$pycache_dir" python3 -m py_compile \
 if command -v shellcheck >/dev/null 2>&1; then
     shellcheck_files=(
         "$repo_dir/install.sh"
+        "$repo_dir/bootstrap.sh"
         "$repo_dir/sync.sh"
         "$repo_dir/check.sh"
         "$repo_dir/scripts/install-external.sh"
@@ -101,6 +103,7 @@ else
         --exclude='*.gif' \
         "$secret_pattern" "$repo_dir/home" "$repo_dir/system" || true)"
 fi
+secret_hits="$(printf '%s\n' "$secret_hits" | grep -vF '// Example: block out two password managers from screen capture.' || true)"
 if [ -n "$secret_hits" ]; then
     printf '%s\n' "$secret_hits"
     printf 'Potential secret-like text found; review before pushing.\n' >&2

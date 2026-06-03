@@ -27,6 +27,9 @@ check.sh    # 提交前校验
 
 ## 新机器安装
 
+推荐从 Ubuntu Desktop 的默认安装开始。Server 版也能用，但需要补齐更多桌面组件，出现缺
+portal、keyring、polkit、XWayland 集成等问题的概率更高。
+
 先安装 Git 并克隆仓库：
 
 ```bash
@@ -34,23 +37,92 @@ git clone <your-repo-url> ~/dotfiles
 cd ~/dotfiles
 ```
 
-安装软件包：
+### 推荐顺序
+
+一键自动配置可以直接执行：
+
+```bash
+./bootstrap.sh
+```
+
+`bootstrap.sh` 会检测当前 Ubuntu 环境、已安装的 apt 包、命令行工具、niri、外部工具、用户配置
+软链接和系统登录模板，只运行缺失的阶段。先查看将要执行的步骤：
+
+```bash
+./bootstrap.sh --dry-run
+```
+
+Doom Emacs 的完整安装默认跳过，需要时显式启用：
+
+```bash
+./bootstrap.sh --with-doom
+```
+
+下面是等价的手动顺序。这些脚本有依赖关系，排查问题时建议按下面顺序执行。
+
+1. 安装 apt 包、构建工具和基础桌面组件：
 
 ```bash
 ./install.sh --packages
 ```
 
-`--packages` 也会从源码安装 `xwayland-satellite`，用于 niri 下运行 Warp Terminal
-等仍依赖 X11 后端的程序。也可以单独执行：
+这一步是后续所有步骤的基础。它会安装 niri/Wayland 运行时依赖、开发工具、fcitx5、Waybar、
+portal 后端、Rust/cargo、Doom/Emacs 支持包，并从源码安装 `xwayland-satellite`，用于 niri
+下运行 Warp Terminal 等仍依赖 X11 后端的程序。
 
-```bash
-./install.sh --xwayland-satellite
-```
-
-安装外部包和非 apt 项：
+2. 安装外部包和非 apt 项：
 
 ```bash
 ./install.sh --external
+```
+
+这一步依赖 `--packages` 里的 `curl`、`jq`、`git`、`cargo` 等工具。它会安装 Chrome、Yazi、
+swww/swww-daemon、Nerd Font Symbols、壁纸集合，以及 apt 中可用的 Ghostty。
+
+3. 从源码构建并安装 niri：
+
+```bash
+./install.sh --niri-source
+```
+
+这一步依赖 `--packages` 里的 Rust 和 niri 构建依赖。需要指定版本时可以追加 ref，例如：
+
+```bash
+./install.sh --niri-source --ref v26.04
+```
+
+4. 安装用户配置和系统登录模板：
+
+```bash
+./install.sh --system
+```
+
+`--system` 会先执行默认的用户配置安装，再写入系统级模板：
+
+- `/etc/greetd/config.toml`
+- `/usr/share/wayland-sessions/niri.desktop`
+- `/usr/local/bin/niri-session`
+
+它还会把默认显示管理器设回 `greetd`，并禁用 `gdm/gdm3`。这一步应放在 niri 已经安装之后，
+否则重启进入 niri 会话时可能找不到 `/usr/local/bin/niri`。
+
+5. 可选：安装 Doom Emacs 配置和包：
+
+```bash
+./install.sh --doom
+```
+
+这一步依赖 `--packages` 里的 Emacs、git、Python/Node 工具。它会再次确保用户配置已链接，然后
+运行 Doom 的安装和环境同步。
+
+执行完后重启，选择 niri 会话登录。
+
+### 单独维护命令
+
+只更新用户配置，不写系统模板：
+
+```bash
+./install.sh
 ```
 
 只安装/更新自动壁纸集合：
@@ -63,38 +135,15 @@ cd ~/dotfiles
 `~/Pictures/Wallpapers/catppuccin-wallpapers`，`wallpaper-random` 会递归扫描
 `~/Pictures/Wallpapers`。
 
-从源码构建并安装 niri：
+只补齐 niri 的 X11 兼容层：
 
 ```bash
-./install.sh --niri-source
+./install.sh --xwayland-satellite
 ```
 
-`./install.sh --packages` 会安装 niri 屏幕共享需要的 GNOME portal 后端，并补齐
-`xwayland-satellite`。
+这通常不需要单独执行，因为 `--packages` 已经会调用它。
 
-安装用户配置：
-
-```bash
-./install.sh
-```
-
-安装 Doom Emacs 配置和包：
-
-```bash
-./install.sh --doom
-```
-
-安装系统级 greetd/niri-session 模板：
-
-```bash
-./install.sh --system
-```
-
-`--system` 会写入：
-
-- `/etc/greetd/config.toml`
-- `/usr/share/wayland-sessions/niri.desktop`
-- `/usr/local/bin/niri-session`
+### 关于 `--all`
 
 也可以在 niri 已经准备好的机器上使用：
 
@@ -103,7 +152,8 @@ cd ~/dotfiles
 ```
 
 它会依次执行 packages、external、用户配置、系统模板和 Doom 配置。niri 源码构建仍然单独使用
-`./install.sh --niri-source`，因为它可能需要按机器选择 ref/portal 选项。
+`./install.sh --niri-source`，因为它可能需要按机器选择 ref。新机器首次安装时不要直接用 `--all`
+替代完整顺序，除非已经先安装好了 niri。
 
 现有文件会先移动到 `~/.dotfiles-backup/<timestamp>/`。
 
