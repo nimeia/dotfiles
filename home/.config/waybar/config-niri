@@ -26,10 +26,42 @@
   "group/windowactions": {
     "orientation": "horizontal",
     "modules": [
+      "custom/window-layout-half",
+      "custom/window-layout-third",
+      "custom/window-layout-wide",
+      "custom/window-layout-stack",
       "custom/window-maximize",
       "custom/window-fullscreen",
       "custom/window-close"
     ]
+  },
+  "custom/window-layout-half": {
+    "format": "½",
+    "tooltip": true,
+    "tooltip-format": "左右 50% 布局\n右键恢复默认宽度",
+    "on-click": "niri-layout half",
+    "on-click-right": "niri-layout reset"
+  },
+  "custom/window-layout-third": {
+    "format": "⅓",
+    "tooltip": true,
+    "tooltip-format": "三列 1/3 布局\n右键恢复默认宽度",
+    "on-click": "niri-layout third",
+    "on-click-right": "niri-layout reset"
+  },
+  "custom/window-layout-wide": {
+    "format": "⅔",
+    "tooltip": true,
+    "tooltip-format": "主窗口 2/3 布局\n右键恢复默认宽度",
+    "on-click": "niri-layout wide",
+    "on-click-right": "niri-layout reset"
+  },
+  "custom/window-layout-stack": {
+    "format": "▤",
+    "tooltip": true,
+    "tooltip-format": "上下堆叠布局\n右键移出底部窗口",
+    "on-click": "niri-layout stack",
+    "on-click-right": "niri-layout unstack"
   },
   "custom/window-maximize": {
     "format": "󰖯",

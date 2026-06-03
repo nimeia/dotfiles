@@ -113,6 +113,7 @@ copy_bashrc
 
 mkdir -p -- "$repo_dir/home/.local/bin"
 copy_local_bin_if_exists ghostty
+copy_local_bin_if_exists niri-layout
 copy_local_bin_if_exists niri-quit
 copy_local_bin_if_exists niri-fullscreen
 copy_local_bin_if_exists niri-overview-wallpaper

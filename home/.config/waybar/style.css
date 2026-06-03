@@ -137,6 +137,10 @@ window {
   transition: background 0.15s ease-in, color 0.15s ease-in;
 }
 
+#custom-window-layout-half,
+#custom-window-layout-third,
+#custom-window-layout-wide,
+#custom-window-layout-stack,
 #custom-window-maximize,
 #custom-window-fullscreen,
 #custom-window-close {
@@ -157,6 +161,10 @@ window {
 #custom-shortcuts:hover,
 #custom-wallpaper:hover,
 #custom-opacity:hover,
+#custom-window-layout-half:hover,
+#custom-window-layout-third:hover,
+#custom-window-layout-wide:hover,
+#custom-window-layout-stack:hover,
 #custom-window-maximize:hover,
 #custom-window-fullscreen:hover {
   background: @selected-bg-color;
@@ -221,6 +229,10 @@ window#waybar.empty #windowactions {
   padding: 0px;
 }
 
+window#waybar.empty #custom-window-layout-half,
+window#waybar.empty #custom-window-layout-third,
+window#waybar.empty #custom-window-layout-wide,
+window#waybar.empty #custom-window-layout-stack,
 window#waybar.empty #custom-window-maximize,
 window#waybar.empty #custom-window-fullscreen,
 window#waybar.empty #custom-window-close {
