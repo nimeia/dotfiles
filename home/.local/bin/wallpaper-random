@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: wallpaper-random [--loop] [wallpaper-dir]
+Usage: wallpaper-random [--loop|--once] [wallpaper-dir]
 
 Set a random wallpaper with swww. Defaults to recursively scanning
 ~/Pictures/Wallpapers and falls back to ~/.local/share/wallpapers/default.png,
@@ -12,12 +12,17 @@ EOF
 }
 
 loop=0
+use_lock=1
 wallpaper_dir="${WALLPAPER_DIR:-$HOME/Pictures/Wallpapers}"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --loop)
             loop=1
+            ;;
+        --once)
+            loop=0
+            use_lock=0
             ;;
         -h | --help)
             usage
@@ -43,9 +48,11 @@ if [ -z "${WAYLAND_DISPLAY:-}" ]; then
     exit 1
 fi
 
-exec 9>"$runtime_dir/wallpaper-random.lock"
-if ! flock -n 9; then
-    exit 0
+if [ "$use_lock" -eq 1 ]; then
+    exec 9>"$runtime_dir/wallpaper-random.lock"
+    if ! flock -n 9; then
+        exit 0
+    fi
 fi
 
 start_swww() {

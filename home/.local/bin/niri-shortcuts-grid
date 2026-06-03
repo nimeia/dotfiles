@@ -1,55 +1,508 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env python3
+from __future__ import annotations
 
-terminal="${TERMINAL:-ghostty}"
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from typing import Callable
 
-show_shortcuts() {
-    cat <<'EOF'
-Niri Shortcuts
 
-Mod+Enter / Mod+T     Open terminal
-Mod+E                 Open Yazi
-Mod+I                 Open settings menu
-Mod+D / Mod+Tab       Toggle overview
-Mod+Shift+/           Show this panel
-Mod+B                 Toggle Waybar
-Mod+Shift+Q           Power menu
+APP_ID = "dev.sakura.NiriShortcuts"
+TITLE = "Important Hotkeys"
 
-Mod+H/J/K/L           Focus left/down/up/right
-Mod+Shift+H/J/K/L     Move window left/down/up/right
-Mod+Ctrl+H/L          Focus monitor left/right
-Mod+R                 Switch column width
-Mod+F                 Maximize column
-Mod+Shift+F           Fullscreen window
-Mod+Q                 Close window
 
-Press Enter to close.
-EOF
-}
+@dataclass(frozen=True)
+class Hotkey:
+    key: str
+    label: str
+    argv: tuple[str, ...] | None = None
+    shell: str | None = None
+    niri_action: tuple[str, ...] | None = None
+    focus_target: bool = False
+    requires_target: bool = False
 
-if command -v "$terminal" >/dev/null 2>&1; then
-    exec "$terminal" --class=dev.sakura.NiriShortcuts -e sh -lc 'cat <<'\''EOF'\''
-Niri Shortcuts
 
-Mod+Enter / Mod+T     Open terminal
-Mod+E                 Open Yazi
-Mod+I                 Open settings menu
-Mod+D / Mod+Tab       Toggle overview
-Mod+Shift+/           Show this panel
-Mod+B                 Toggle Waybar
-Mod+Shift+Q           Power menu
+GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
+    (
+        "启动与系统",
+        (
+            Hotkey("Mod Shift /", "打开本提示", argv=("/home/sakura/.local/bin/niri-shortcuts-grid",)),
+            Hotkey("Mod Enter / T", "打开终端", argv=("ghostty",)),
+            Hotkey("Mod S / R", "搜索或运行应用", argv=("fuzzel",)),
+            Hotkey("Mod E", "打开文件管理器", argv=("ghostty", "-e", "/home/sakura/.local/bin/yazi", "/home/sakura")),
+            Hotkey("Mod I", "设置菜单", argv=("/home/sakura/.local/bin/niri-settings-menu",)),
+            Hotkey("Mod P", "显示设置", argv=("wdisplays",)),
+            Hotkey("Mod L", "锁屏", argv=("swaylock",)),
+            Hotkey("Mod B", "显示或隐藏 Waybar", argv=("killall", "-SIGUSR1", "waybar")),
+            Hotkey("Mod X / Shift Q", "电源菜单", argv=("wlogout", "--buttons-per-row", "5", "--column-spacing", "12", "--row-spacing", "12", "--margin", "275")),
+        ),
+    ),
+    (
+        "窗口",
+        (
+            Hotkey("Alt F4 / Mod Q", "关闭当前窗口", niri_action=("close-window",), focus_target=True, requires_target=True),
+            Hotkey("Mod F", "最大化当前列", niri_action=("maximize-column",), focus_target=True, requires_target=True),
+            Hotkey("Mod Shift F", "全屏当前窗口", niri_action=("fullscreen-window",), focus_target=True, requires_target=True),
+            Hotkey("Mod M / Up", "最大化到屏幕边缘", niri_action=("maximize-window-to-edges",), focus_target=True, requires_target=True),
+            Hotkey("Mod V", "切换浮动或平铺", niri_action=("toggle-window-floating",), focus_target=True, requires_target=True),
+            Hotkey("Mod Shift V", "切换浮动/平铺焦点", niri_action=("switch-focus-between-floating-and-tiling",), focus_target=True, requires_target=True),
+            Hotkey("Mod W", "切换列标签页", niri_action=("toggle-column-tabbed-display",), focus_target=True, requires_target=True),
+            Hotkey("Mod C", "居中当前列", niri_action=("center-column",), focus_target=True, requires_target=True),
+            Hotkey("Waybar ◐", "切换当前程序透明度", argv=("window-opacity", "--toggle"), focus_target=True, requires_target=True),
+        ),
+    ),
+    (
+        "聚焦与移动",
+        (
+            Hotkey("Mod Left / Alt H", "聚焦左侧列", niri_action=("focus-column-left",), focus_target=True, requires_target=True),
+            Hotkey("Mod Right / Alt L", "聚焦右侧列", niri_action=("focus-column-right",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt J", "聚焦下方窗口", niri_action=("focus-window-down",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt K", "聚焦上方窗口", niri_action=("focus-window-up",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Left / Ctrl Alt H", "左移当前列", niri_action=("move-column-left",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Right / Ctrl Alt L", "右移当前列", niri_action=("move-column-right",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Down / Ctrl Alt J", "下移窗口", niri_action=("move-window-down",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Up / Ctrl Alt K", "上移窗口", niri_action=("move-window-up",), focus_target=True, requires_target=True),
+        ),
+    ),
+    (
+        "工作区与显示器",
+        (
+            Hotkey("Mod D / Tab / O", "打开或关闭概览", niri_action=("toggle-overview",), focus_target=True),
+            Hotkey("Mod Ctrl Right / U", "下一个工作区", niri_action=("focus-workspace-down",), focus_target=True),
+            Hotkey("Mod Ctrl Left / Y", "上一个工作区", niri_action=("focus-workspace-up",), focus_target=True),
+            Hotkey("Mod Ctrl Shift Right / Mod Ctrl U", "移动列到下个工作区", niri_action=("move-column-to-workspace-down",), focus_target=True, requires_target=True),
+            Hotkey("Mod Ctrl Shift Left / Mod Ctrl Y", "移动列到上个工作区", niri_action=("move-column-to-workspace-up",), focus_target=True, requires_target=True),
+            Hotkey("Mod Shift Alt Left / H", "聚焦左侧显示器", niri_action=("focus-monitor-left",), focus_target=True),
+            Hotkey("Mod Shift Alt Right / L", "聚焦右侧显示器", niri_action=("focus-monitor-right",), focus_target=True),
+            Hotkey("Mod Shift P", "关闭显示器", niri_action=("power-off-monitors",), focus_target=True),
+        ),
+    ),
+    (
+        "尺寸与布局",
+        (
+            Hotkey("Mod Alt R", "切换预设列宽", niri_action=("switch-preset-column-width",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Shift R", "反向切换列宽", niri_action=("switch-preset-column-width-back",), focus_target=True, requires_target=True),
+            Hotkey("Mod Ctrl Shift R", "切换预设窗口高度", niri_action=("switch-preset-window-height",), focus_target=True, requires_target=True),
+            Hotkey("Mod Ctrl R", "重置窗口高度", niri_action=("reset-window-height",), focus_target=True, requires_target=True),
+            Hotkey("Mod Ctrl F", "展开列到可用宽度", niri_action=("expand-column-to-available-width",), focus_target=True, requires_target=True),
+            Hotkey("Mod Minus", "缩窄当前列", niri_action=("set-column-width", "-10%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Equal", "加宽当前列", niri_action=("set-column-width", "+10%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Wheel Up / Left", "滚轮缩窄当前列", niri_action=("set-column-width", "-5%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Wheel Down / Right", "滚轮加宽当前列", niri_action=("set-column-width", "+5%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Shift Minus", "降低窗口高度", niri_action=("set-window-height", "-10%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Shift Equal", "增加窗口高度", niri_action=("set-window-height", "+10%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Shift Wheel Up", "滚轮降低窗口高度", niri_action=("set-window-height", "-5%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt Shift Wheel Down", "滚轮增加窗口高度", niri_action=("set-window-height", "+5%"), focus_target=True, requires_target=True),
+            Hotkey("Mod Ctrl C", "居中所有可见列", niri_action=("center-visible-columns",), focus_target=True),
+        ),
+    ),
+    (
+        "工具与媒体",
+        (
+            Hotkey("Print / Mod Shift S", "截图", niri_action=("screenshot",)),
+            Hotkey("Ctrl Print / Mod Ctrl Shift S", "截取屏幕", niri_action=("screenshot-screen",)),
+            Hotkey("Alt Print / Mod Alt Shift S", "截取当前窗口", niri_action=("screenshot-window",), focus_target=True, requires_target=True),
+            Hotkey("Audio +", "提高音量", shell="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ -l 1.0"),
+            Hotkey("Audio -", "降低音量", shell="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
+            Hotkey("Audio Mute", "切换静音", shell="wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),
+            Hotkey("Mic Mute", "切换麦克风静音", shell="wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),
+            Hotkey("Media Play", "播放或暂停", shell="playerctl play-pause"),
+            Hotkey("Media Prev", "上一首", shell="playerctl previous"),
+            Hotkey("Media Next", "下一首", shell="playerctl next"),
+            Hotkey("Mod Ctrl Shift /", "niri 原生提示", niri_action=("show-hotkey-overlay",)),
+        ),
+    ),
+)
 
-Mod+H/J/K/L           Focus left/down/up/right
-Mod+Shift+H/J/K/L     Move window left/down/up/right
-Mod+Ctrl+H/L          Focus monitor left/right
-Mod+R                 Switch column width
-Mod+F                 Maximize column
-Mod+Shift+F           Fullscreen window
-Mod+Q                 Close window
 
-Press Enter to close.
-EOF
-read _'
-fi
+def print_plain() -> None:
+    print(TITLE)
+    print()
+    for group, items in GROUPS:
+        print(group)
+        for item in items:
+            print(f"  {item.key:<20} {item.label}")
+        print()
 
-show_shortcuts
+
+def command_exists(argv: tuple[str, ...] | None) -> bool:
+    return not argv or shutil.which(argv[0]) is not None
+
+
+def shell_command_exists(command: str | None) -> bool:
+    if not command:
+        return True
+
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return True
+
+    return not parts or shutil.which(parts[0]) is not None
+
+
+def unavailable_reason(item: Hotkey, target_id: int | None) -> str | None:
+    if item.requires_target and target_id is None:
+        return "没有可作用的目标窗口"
+
+    if item.argv and not command_exists(item.argv):
+        return f"找不到命令：{item.argv[0]}"
+
+    if item.shell and not shell_command_exists(item.shell):
+        return f"找不到命令：{shlex.split(item.shell)[0]}"
+
+    if item.niri_action and (not os.environ.get("NIRI_SOCKET") or not shutil.which("niri")):
+        return "niri 会话不可用"
+
+    return None
+
+
+def run_detached(argv: tuple[str, ...]) -> None:
+    subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def run_quiet(argv: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+
+
+def focused_window_id() -> int | None:
+    if not os.environ.get("NIRI_SOCKET") or not shutil.which("niri"):
+        return None
+
+    result = run_quiet(("niri", "msg", "-j", "focused-window"))
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    if data.get("app_id") == APP_ID:
+        return None
+
+    window_id = data.get("id")
+    return window_id if isinstance(window_id, int) else None
+
+
+def shortcut_window_ids() -> list[int]:
+    if not os.environ.get("NIRI_SOCKET") or not shutil.which("niri"):
+        return []
+
+    result = run_quiet(("niri", "msg", "-j", "windows"))
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+
+    try:
+        windows = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+    shortcut_windows = [window for window in windows if window.get("app_id") == APP_ID]
+    shortcut_windows.sort(
+        key=lambda window: (
+            (window.get("focus_timestamp") or {}).get("secs") or 0,
+            (window.get("focus_timestamp") or {}).get("nanos") or 0,
+        )
+    )
+
+    ids: list[int] = []
+    for window in shortcut_windows:
+        window_id = window.get("id")
+        if isinstance(window_id, int):
+            ids.append(window_id)
+    return ids
+
+
+def focus_window(window_id: int | None) -> bool:
+    if window_id is None:
+        return False
+
+    return run_quiet(("niri", "msg", "action", "focus-window", "--id", str(window_id))).returncode == 0
+
+
+def focus_existing_shortcuts() -> bool:
+    ids = shortcut_window_ids()
+    if not ids:
+        return False
+
+    for old_id in ids[:-1]:
+        run_quiet(("niri", "msg", "action", "close-window", "--id", str(old_id)))
+
+    current_id = ids[-1]
+    focus_window(current_id)
+    run_quiet(("niri", "msg", "action", "set-window-width", "--id", str(current_id), "1040"))
+    run_quiet(("niri", "msg", "action", "set-window-height", "--id", str(current_id), "720"))
+    run_quiet(("niri", "msg", "action", "center-window", "--id", str(current_id)))
+    return True
+
+
+def niri_action(action: tuple[str, ...], target_id: int | None, requires_target: bool) -> bool:
+    if not shutil.which("niri"):
+        return False
+
+    if target_id is not None:
+        if requires_target and not focus_window(target_id):
+            return False
+    elif requires_target:
+        return False
+
+    return run_quiet(("niri", "msg", "action", *action)).returncode == 0
+
+
+def prepare_target_focus(item: Hotkey, target_id: int | None) -> bool:
+    if not item.focus_target:
+        return True
+
+    if target_id is not None and focus_window(target_id):
+        return True
+
+    return not item.requires_target
+
+
+def hotkey_runner(item: Hotkey, target_id: int | None, close: Callable[[], None]) -> Callable[[], None]:
+    def run() -> None:
+        if unavailable_reason(item, target_id):
+            return
+
+        ran = False
+        if item.niri_action:
+            ran = niri_action(item.niri_action, target_id if item.focus_target else None, item.requires_target)
+        elif item.shell:
+            if not prepare_target_focus(item, target_id):
+                return
+            run_detached(("sh", "-lc", item.shell))
+            ran = True
+        elif item.argv and command_exists(item.argv):
+            if not prepare_target_focus(item, target_id):
+                return
+            run_detached(item.argv)
+            ran = True
+
+        if ran:
+            close()
+
+    return run
+
+
+def load_gtk() -> tuple[object, object, object, object]:
+    import gi
+
+    gi.require_version("Gdk", "4.0")
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gdk, Gio, Gtk, Pango
+
+    return Gtk, Gdk, Gio, Pango
+
+
+def build_ui(app: object, target_id: int | None) -> None:
+    Gtk, Gdk, _Gio, Pango = load_gtk()
+
+    css = """
+    window {
+      background: #11111b;
+      color: #cdd6f4;
+    }
+    .root {
+      padding: 20px;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .subtitle {
+      color: #a6adc8;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .group-card {
+      background: #1e1e2e;
+      border: 1px solid #313244;
+      border-radius: 10px;
+      padding: 12px;
+      margin: 6px;
+    }
+    .group-title {
+      color: #89dceb;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    button.hotkey-row {
+      background: transparent;
+      border-radius: 8px;
+      padding: 7px 8px;
+      margin: 2px 0;
+      color: #cdd6f4;
+    }
+    button.hotkey-row:hover {
+      background: #313244;
+    }
+    .keycap {
+      background: #181825;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      color: #f5c2e7;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 7px;
+      min-width: 150px;
+    }
+    .action-label {
+      color: #cdd6f4;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .disabled-row {
+      opacity: 0.45;
+    }
+    """
+    provider = Gtk.CssProvider()
+    provider.load_from_data(css.encode())
+    display = Gdk.Display.get_default()
+    if display:
+        Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    window = Gtk.ApplicationWindow(application=app)
+    window.set_title(TITLE)
+    window.set_default_size(1040, 720)
+    window.set_resizable(True)
+
+    key_controller = Gtk.EventControllerKey()
+    key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+
+    def on_key_pressed(_controller: object, keyval: int, _keycode: int, _state: object) -> bool:
+        if keyval == Gdk.KEY_Escape:
+            window.close()
+            return True
+        return False
+
+    key_controller.connect("key-pressed", on_key_pressed)
+    window.add_controller(key_controller)
+
+    root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    root.add_css_class("root")
+    window.set_child(root)
+
+    header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    root.append(header)
+
+    title = Gtk.Label(label="Important Hotkeys")
+    title.add_css_class("title")
+    title.set_xalign(0)
+    header.append(title)
+
+    subtitle = Gtk.Label(label="按键速查和常用动作")
+    subtitle.add_css_class("subtitle")
+    subtitle.set_xalign(0)
+    header.append(subtitle)
+
+    scroller = Gtk.ScrolledWindow()
+    scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    scroller.set_vexpand(True)
+    root.append(scroller)
+
+    grid = Gtk.Grid()
+    grid.set_column_homogeneous(True)
+    grid.set_row_homogeneous(False)
+    grid.set_column_spacing(8)
+    grid.set_row_spacing(8)
+    scroller.set_child(grid)
+
+    def close_window() -> None:
+        window.close()
+
+    seen_active = {"value": False}
+
+    def on_active_changed(_window: object, _param: object) -> None:
+        if window.is_active():
+            seen_active["value"] = True
+        elif seen_active["value"]:
+            close_window()
+
+    window.connect("notify::is-active", on_active_changed)
+
+    for index, (group, items) in enumerate(GROUPS):
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        card.add_css_class("group-card")
+
+        group_label = Gtk.Label(label=group)
+        group_label.add_css_class("group-title")
+        group_label.set_xalign(0)
+        card.append(group_label)
+
+        for item in items:
+            row = Gtk.Button()
+            row.add_css_class("hotkey-row")
+            reason = unavailable_reason(item, target_id)
+            if reason:
+                row.add_css_class("disabled-row")
+                row.set_sensitive(False)
+                row.set_tooltip_text(reason)
+
+            content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            content.set_hexpand(True)
+            row.set_child(content)
+
+            key = Gtk.Label(label=item.key)
+            key.add_css_class("keycap")
+            key.set_xalign(0.5)
+            key.set_wrap(True)
+            key.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            key.set_width_chars(16)
+            key.set_max_width_chars(22)
+            content.append(key)
+
+            label = Gtk.Label(label=item.label)
+            label.add_css_class("action-label")
+            label.set_xalign(0)
+            label.set_hexpand(True)
+            label.set_wrap(True)
+            label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            content.append(label)
+
+            runner = hotkey_runner(item, target_id, close_window)
+            row.connect("clicked", lambda _button, callback=runner: callback())
+            card.append(row)
+
+        grid.attach(card, index % 3, index // 3, 1, 1)
+
+    window.present()
+
+    if os.environ.get("NIRI_SOCKET") and shutil.which("niri"):
+        run_quiet(("niri", "msg", "action", "set-window-width", "1040"))
+        run_quiet(("niri", "msg", "action", "set-window-height", "720"))
+        run_quiet(("niri", "msg", "action", "center-window"))
+
+
+def main() -> int:
+    if "--print" in sys.argv:
+        print_plain()
+        return 0
+
+    if not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
+        print_plain()
+        return 0
+
+    if focus_existing_shortcuts():
+        return 0
+
+    Gtk, _Gdk, Gio, _Pango = load_gtk()
+    target_id = focused_window_id()
+
+    app = Gtk.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
+    app.connect("activate", lambda gtk_app: build_ui(gtk_app, target_id))
+    return app.run(sys.argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

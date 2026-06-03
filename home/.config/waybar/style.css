@@ -105,7 +105,25 @@ window {
   transition: background 0.15s ease-in, color 0.15s ease-in;
 }
 
+#custom-shortcuts,
+#custom-wallpaper,
+#custom-opacity {
+  border-radius: 12px;
+  font-size: 16px;
+  margin: 0px;
+  min-width: 0px;
+  padding: 0px 4px;
+  transition: background 0.15s ease-in, color 0.15s ease-in;
+}
+
 #pulseaudio.prefix:hover {
+  background: @selected-bg-color;
+  color: @selected-fg-color;
+}
+
+#custom-shortcuts:hover,
+#custom-wallpaper:hover,
+#custom-opacity:hover {
   background: @selected-bg-color;
   color: @selected-fg-color;
 }

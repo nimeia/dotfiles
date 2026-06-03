@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+BEGIN = "// BEGIN window-opacity managed"
+END = "// END window-opacity managed"
+DEFAULT_OPACITY = 0.85
+MIN_OPACITY = 0.30
+MAX_OPACITY = 1.00
+STEP = 0.05
+
+
+def opacity_config_path() -> Path:
+    base = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+    return base / "window-opacity.kdl"
+
+
+def state_path() -> Path:
+    base = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+    return base / "window-opacity.json"
+
+
+def run_quiet(argv: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+
+
+def ensure_niri_socket() -> bool:
+    if os.environ.get("NIRI_SOCKET"):
+        return True
+
+    runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+    candidates = sorted(
+        runtime_dir.glob("niri*.sock"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    if not candidates:
+        return False
+
+    os.environ["NIRI_SOCKET"] = str(candidates[-1])
+    return True
+
+
+def focused_app_id() -> str | None:
+    if not ensure_niri_socket() or not shutil.which("niri"):
+        return None
+
+    result = run_quiet(("niri", "msg", "-j", "focused-window"))
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    app_id = data.get("app_id")
+    return app_id if isinstance(app_id, str) and app_id else None
+
+
+def load_state() -> dict[str, object]:
+    path = state_path()
+    try:
+        data = json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+    return data if isinstance(data, dict) else {}
+
+
+def save_state(state: dict[str, object]) -> None:
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n")
+
+
+def clamp(value: float) -> float:
+    return min(MAX_OPACITY, max(MIN_OPACITY, round(value / STEP) * STEP))
+
+
+def regex_literal(value: str) -> str:
+    return re.escape(value)
+
+
+def managed_block(app_id: str, opacity: float) -> str:
+    escaped_app_id = regex_literal(app_id)
+    return f"""{BEGIN}
+// Updated by ~/.local/bin/window-opacity.
+window-rule {{
+    match app-id=r#"^{escaped_app_id}$"#
+    opacity {opacity:.2f}
+}}
+{END}"""
+
+
+def active_opacity(text: str, app_id: str) -> float | None:
+    pattern = re.compile(rf"{re.escape(BEGIN)}.*?{re.escape(END)}", re.S)
+    match = pattern.search(text)
+    if not match:
+        return None
+
+    block = match.group(0)
+    expected = f'app-id=r#"^{regex_literal(app_id)}$"#'
+    if expected not in block:
+        return None
+
+    opacity_match = re.search(r"^\s*opacity\s+([0-9.]+)\s*$", block, re.M)
+    if not opacity_match:
+        return None
+
+    try:
+        return float(opacity_match.group(1))
+    except ValueError:
+        return None
+
+
+def last_opacity(state: dict[str, object], app_id: str) -> float:
+    apps = state.get("apps")
+    if isinstance(apps, dict):
+        value = apps.get(app_id)
+        if isinstance(value, int | float) and MIN_OPACITY <= float(value) < MAX_OPACITY:
+            return clamp(float(value))
+    return DEFAULT_OPACITY
+
+
+def remember_opacity(state: dict[str, object], app_id: str, opacity: float) -> None:
+    if opacity >= MAX_OPACITY:
+        return
+
+    apps = state.get("apps")
+    if not isinstance(apps, dict):
+        apps = {}
+        state["apps"] = apps
+    apps[app_id] = round(opacity, 2)
+
+
+def set_opacity(app_id: str, opacity: float) -> None:
+    opacity = clamp(opacity)
+    path = opacity_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(managed_block(app_id, opacity) + "\n")
+
+    if shutil.which("niri") and ensure_niri_socket():
+        run_quiet(("niri", "msg", "action", "load-config-file"))
+
+
+def usage() -> None:
+    print("Usage: window-opacity [--up|--down|--toggle|--reset|--status]", file=sys.stderr)
+
+
+def main() -> int:
+    action = sys.argv[1] if len(sys.argv) > 1 else "--toggle"
+    if action not in {"--up", "--down", "--toggle", "--reset", "--status", "-h", "--help"}:
+        usage()
+        return 2
+
+    if action in {"-h", "--help"}:
+        usage()
+        return 0
+
+    app_id = focused_app_id()
+    if not app_id:
+        return 1
+
+    path = opacity_config_path()
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        text = ""
+    state = load_state()
+    current = active_opacity(text, app_id)
+
+    if action == "--status":
+        value = current if current is not None else MAX_OPACITY
+        print(f"{app_id}: {round(value * 100):.0f}%")
+        return 0
+
+    if action == "--reset":
+        new_opacity = MAX_OPACITY
+    elif action == "--toggle":
+        if current is not None and current < MAX_OPACITY:
+            remember_opacity(state, app_id, current)
+            new_opacity = MAX_OPACITY
+        else:
+            new_opacity = last_opacity(state, app_id)
+    else:
+        base = current if current is not None else MAX_OPACITY
+        delta = STEP if action == "--up" else -STEP
+        new_opacity = clamp(base + delta)
+        remember_opacity(state, app_id, new_opacity)
+
+    set_opacity(app_id, new_opacity)
+    save_state(state)
+    print(f"{app_id}: {round(new_opacity * 100):.0f}%")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

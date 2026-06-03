@@ -428,6 +428,9 @@ window-rule {
     clip-to-geometry true
 }
 
+// Runtime-generated current-app opacity rule.
+include optional=true "~/.local/state/window-opacity.kdl"
+
 binds {
     // Keys consist of modifiers separated by + signs, followed by an XKB key name
     // in the end. To find an XKB name for a particular key, you may use a program
@@ -696,10 +699,16 @@ binds {
     // set-column-width "100" will make the column occupy 200 physical screen pixels.
     Mod+Minus hotkey-overlay-title="缩窄当前列" { set-column-width "-10%"; }
     Mod+Equal hotkey-overlay-title="加宽当前列" { set-column-width "+10%"; }
+    Mod+Alt+WheelScrollUp    cooldown-ms=80 hotkey-overlay-title="鼠标滚轮缩窄当前列" { set-column-width "-5%"; }
+    Mod+Alt+WheelScrollLeft  cooldown-ms=80 hotkey-overlay-title="鼠标横向滚轮缩窄当前列" { set-column-width "-5%"; }
+    Mod+Alt+WheelScrollDown  cooldown-ms=80 hotkey-overlay-title="鼠标滚轮加宽当前列" { set-column-width "+5%"; }
+    Mod+Alt+WheelScrollRight cooldown-ms=80 hotkey-overlay-title="鼠标横向滚轮加宽当前列" { set-column-width "+5%"; }
 
     // Finer height adjustments when in column with other windows.
     Mod+Shift+Minus hotkey-overlay-title="降低窗口高度" { set-window-height "-10%"; }
     Mod+Shift+Equal hotkey-overlay-title="增加窗口高度" { set-window-height "+10%"; }
+    Mod+Alt+Shift+WheelScrollUp   cooldown-ms=80 hotkey-overlay-title="鼠标滚轮降低窗口高度" { set-window-height "-5%"; }
+    Mod+Alt+Shift+WheelScrollDown cooldown-ms=80 hotkey-overlay-title="鼠标滚轮增加窗口高度" { set-window-height "+5%"; }
 
     // Move the focused window between the floating and the tiling layout.
     Mod+V       hotkey-overlay-title="切换窗口浮动/平铺" { toggle-window-floating; }

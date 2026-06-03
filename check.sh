@@ -10,6 +10,10 @@ bash -n \
     "$repo_dir/scripts/install-external.sh" \
     "$repo_dir/scripts/install-niri-source.sh"
 
+python3 -m py_compile \
+    "$repo_dir/home/.local/bin/niri-shortcuts-grid" \
+    "$repo_dir/home/.local/bin/window-opacity"
+
 if command -v shellcheck >/dev/null 2>&1; then
     shellcheck_files=(
         "$repo_dir/install.sh"
@@ -19,7 +23,6 @@ if command -v shellcheck >/dev/null 2>&1; then
         "$repo_dir/scripts/install-niri-source.sh"
         "$repo_dir/home/.local/bin/niri-overview-wallpaper"
         "$repo_dir/home/.local/bin/niri-settings-menu"
-        "$repo_dir/home/.local/bin/niri-shortcuts-grid"
         "$repo_dir/home/.local/bin/wallpaper-random"
         "$repo_dir/home/.local/bin/ghostty"
     )
@@ -55,6 +58,7 @@ required_repo_files=(
     "$repo_dir/home/.local/bin/niri-settings-menu"
     "$repo_dir/home/.local/bin/niri-shortcuts-grid"
     "$repo_dir/home/.local/bin/wallpaper-random"
+    "$repo_dir/home/.local/bin/window-opacity"
     "$repo_dir/home/.local/share/applications/google-chrome.desktop"
     "$repo_dir/home/.local/share/wallpapers/default.png"
     "$repo_dir/home/.local/share/wallpapers/niri-overview.png"

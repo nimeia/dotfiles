@@ -208,6 +208,31 @@
     "tooltip-format": "打开电源菜单",
     "on-click": "wlogout --buttons-per-row 5 --column-spacing 12 --row-spacing 12 --margin 275"
   },
+  "custom/wallpaper": {
+    "format": "󰸉",
+    "tooltip": true,
+    "tooltip-format": "切换桌面背景\n左键随机切换，右键重启背景服务",
+    "on-click": "wallpaper-random --once",
+    "on-click-right": "systemctl --user restart wallpaper-random.service niri-overview-wallpaper.service"
+  },
+  "custom/opacity": {
+    "format": "◐",
+    "tooltip": true,
+    "tooltip-format": "调整当前程序透明度\n左键切换，右键恢复，滚轮调节",
+    "on-click": "window-opacity --toggle",
+    "on-click-right": "window-opacity --reset",
+    "on-scroll-up": "window-opacity --up",
+    "on-scroll-down": "window-opacity --down",
+    "scroll-step": 5,
+    "smooth-scrolling-threshold": 1
+  },
+  "custom/shortcuts": {
+    "format": "󰌌",
+    "tooltip": true,
+    "tooltip-format": "显示快捷键提示\n左键打开自定义提示，右键打开 niri 原生提示",
+    "on-click": "niri-shortcuts-grid",
+    "on-click-right": "niri msg action show-hotkey-overlay"
+  },
   "custom/trayright": {
     "format": " ",
     "tooltip": false

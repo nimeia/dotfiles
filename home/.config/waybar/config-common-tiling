@@ -26,6 +26,9 @@
     "orientation": "horizontal",
     "modules": [
       "pulseaudio#prefix",
+      "custom/shortcuts",
+      "custom/wallpaper",
+      "custom/opacity",
       "tray",
       "custom/poweroff"
     ]
