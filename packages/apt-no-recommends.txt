@@ -1,0 +1,3 @@
+# Portal backend for niri screencasting.
+# Install without recommends to avoid pulling a full GNOME session on fresh setups.
+xdg-desktop-portal-gnome

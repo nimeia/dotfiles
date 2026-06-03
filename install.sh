@@ -7,7 +7,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 usage() {
     cat <<'EOF'
-Usage: ./install.sh [--packages|--external|--wallpapers|--niri-source|--system|--doom|--all]
+Usage: ./install.sh [--packages|--external|--wallpapers|--xwayland-satellite|--niri-source|--system|--doom|--all]
 
 With no arguments, installs user dotfile symlinks and local helper scripts.
 
@@ -15,6 +15,8 @@ Options:
   --packages     Install apt packages, npm globals, rust-analyzer, and shims.
   --external     Install external tools: Chrome, Yazi, swww, fonts, wallpapers.
   --wallpapers   Install or update the Catppuccin wallpaper collection only.
+  --xwayland-satellite
+                 Build/install xwayland-satellite for niri X11 app support.
   --niri-source  Build/install niri from source; extra args are forwarded.
   --system       Install user files and system greetd/niri session templates.
   --doom         Install user files and Doom Emacs packages/env.
@@ -66,6 +68,7 @@ install_user() {
         .config/swaylock \
         .config/waybar \
         .config/wlogout \
+        .config/xdg-desktop-portal \
         .local/share/applications/google-chrome.desktop \
         .local/share/wallpapers/default.png \
         .local/share/wallpapers/niri-overview.png; do
@@ -205,6 +208,10 @@ install_python_tool_shims() {
 install_packages() {
     sudo apt update
     grep -vE '^\s*(#|$)' "$repo_dir/packages/apt.txt" | xargs -r sudo apt install -y
+    if [ -f "$repo_dir/packages/apt-no-recommends.txt" ]; then
+        grep -vE '^\s*(#|$)' "$repo_dir/packages/apt-no-recommends.txt" | xargs -r sudo apt install --no-install-recommends -y
+    fi
+    install_xwayland_satellite --skip-deps
     ensure_backlight_access
     install_npm_globals
     install_rust_analyzer
@@ -215,6 +222,15 @@ install_system() {
     sudo install -D -m 0644 "$repo_dir/system/etc/greetd/config.toml" /etc/greetd/config.toml
     sudo install -D -m 0644 "$repo_dir/system/usr/share/wayland-sessions/niri.desktop" /usr/share/wayland-sessions/niri.desktop
     sudo install -D -m 0755 "$repo_dir/system/usr/local/bin/niri-session" /usr/local/bin/niri-session
+
+    if [ -x /usr/sbin/greetd ]; then
+        printf '/usr/sbin/greetd\n' | sudo tee /etc/X11/default-display-manager >/dev/null
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl disable gdm3.service gdm.service >/dev/null 2>&1 || true
+        sudo systemctl enable greetd.service >/dev/null
+    fi
 }
 
 install_external() {
@@ -223,6 +239,10 @@ install_external() {
 
 install_wallpapers() {
     "$repo_dir/scripts/install-external.sh" --wallpapers-only
+}
+
+install_xwayland_satellite() {
+    "$repo_dir/scripts/install-xwayland-satellite.sh" "$@"
 }
 
 case "${1:-}" in
@@ -238,6 +258,11 @@ case "${1:-}" in
         ;;
     --wallpapers)
         install_wallpapers
+        ;;
+    --xwayland-satellite)
+        shift
+        install_xwayland_satellite "$@"
+        exit 0
         ;;
     --niri-source)
         shift

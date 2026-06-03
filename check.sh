@@ -11,6 +11,7 @@ bash -n \
     "$repo_dir/check.sh" \
     "$repo_dir/scripts/install-external.sh" \
     "$repo_dir/scripts/install-niri-source.sh" \
+    "$repo_dir/scripts/install-xwayland-satellite.sh" \
     "$repo_dir/home/.local/bin/niri-layout"
 
 PYTHONPYCACHEPREFIX="$pycache_dir" python3 -m py_compile \
@@ -25,6 +26,7 @@ if command -v shellcheck >/dev/null 2>&1; then
         "$repo_dir/check.sh"
         "$repo_dir/scripts/install-external.sh"
         "$repo_dir/scripts/install-niri-source.sh"
+        "$repo_dir/scripts/install-xwayland-satellite.sh"
         "$repo_dir/home/.local/bin/niri-layout"
         "$repo_dir/home/.local/bin/screen-brightness"
         "$repo_dir/home/.local/bin/niri-overview-wallpaper"
@@ -70,6 +72,7 @@ required_repo_files=(
     "$repo_dir/home/.local/bin/window-opacity"
     "$repo_dir/home/.config/starship.toml"
     "$repo_dir/home/.config/swaylock/config"
+    "$repo_dir/home/.config/xdg-desktop-portal/niri-portals.conf"
     "$repo_dir/home/.local/share/applications/google-chrome.desktop"
     "$repo_dir/home/.local/share/wallpapers/default.png"
     "$repo_dir/home/.local/share/wallpapers/niri-overview.png"

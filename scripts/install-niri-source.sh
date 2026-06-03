@@ -26,7 +26,7 @@ Options:
   --skip-deps        Do not install apt build/runtime dependencies.
   --with-gnome-portal
                      Also install xdg-desktop-portal-gnome for screencasting.
-                     This is useful, but pulls in a larger GNOME dependency set.
+                     Installed without recommended packages to avoid a full GNOME session.
   --build-only       Build but do not install system files.
   --force            Remove a non-git source directory if it blocks clone.
   -h, --help         Show this help.
@@ -139,7 +139,7 @@ install_dependencies() {
     sudo apt install -y "${packages[@]}"
 
     if [ "$with_gnome_portal" -eq 1 ]; then
-        sudo apt install -y xdg-desktop-portal-gnome
+        sudo apt install --no-install-recommends -y xdg-desktop-portal-gnome
     fi
 }
 
@@ -240,11 +240,11 @@ install_niri() {
 
 check_runtime_recommendations() {
     if ! have xwayland-satellite; then
-        warn "xwayland-satellite is not in PATH; X11 applications will not work until it is installed"
+        warn "xwayland-satellite is not in PATH; run ./install.sh --xwayland-satellite so niri can run X11 applications"
     fi
 
     if ! dpkg-query -W -f='${db:Status-Abbrev}' xdg-desktop-portal-gnome 2>/dev/null | grep -q '^ii '; then
-        warn "xdg-desktop-portal-gnome is not installed; run this script with --with-gnome-portal if you need screencasting"
+        warn "xdg-desktop-portal-gnome is not installed; run ./install.sh --packages or pass --with-gnome-portal if you need screencasting"
     fi
 }
 

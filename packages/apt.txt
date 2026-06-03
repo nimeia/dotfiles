@@ -88,6 +88,9 @@ ripgrep
 fd-find
 cargo
 rustc
+clang
+libxcb1-dev
+libxcb-cursor-dev
 
 # Emacs and Doom Emacs support
 emacs-pgtk

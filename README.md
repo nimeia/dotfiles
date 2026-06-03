@@ -40,6 +40,13 @@ cd ~/dotfiles
 ./install.sh --packages
 ```
 
+`--packages` 也会从源码安装 `xwayland-satellite`，用于 niri 下运行 Warp Terminal
+等仍依赖 X11 后端的程序。也可以单独执行：
+
+```bash
+./install.sh --xwayland-satellite
+```
+
 安装外部包和非 apt 项：
 
 ```bash
@@ -62,11 +69,8 @@ cd ~/dotfiles
 ./install.sh --niri-source
 ```
 
-需要 screencast/屏幕共享时，可以额外安装 GNOME portal：
-
-```bash
-./install.sh --niri-source --with-gnome-portal
-```
+`./install.sh --packages` 会安装 niri 屏幕共享需要的 GNOME portal 后端，并补齐
+`xwayland-satellite`。
 
 安装用户配置：
 
@@ -142,7 +146,7 @@ git status
 - nvim 内部 `.git`
 - Warp 登录状态和本地数据库
 - 浏览器、VS Code、Zed 等应用缓存
-- 本机代理地址，例如 `HTTP_PROXY=http://192.168...`
+- 私有网络代理地址，例如 `HTTP_PROXY=http://192.168...`；通用的本机 Clash 代理保存在 `home/.config/environment.d/proxy.conf`
 - 大型二进制包，例如 Ghostty bundle、Yazi bundle、Codex bundle
 - Oh my tmux 上游仓库不直接提交，由 `install.sh` 在新机器 clone 到 `~/.local/share/oh-my-tmux`
 - Doom Emacs 上游框架不直接提交，由 `install.sh` clone 到 `~/.config/emacs`

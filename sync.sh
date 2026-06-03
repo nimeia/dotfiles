@@ -44,6 +44,59 @@ copy_file_if_exists() {
     copy_file "$rel"
 }
 
+normalize_google_chrome_desktop() {
+    local rel=".local/share/applications/google-chrome.desktop"
+    local dst="$repo_dir/home/$rel"
+    local tmp
+    local mime_type
+
+    [ -f "$dst" ] || return 0
+
+    mime_type='MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/google-chrome;'
+    tmp="$(mktemp)"
+    awk -v mime_type="$mime_type" '
+        /^\[Desktop Action / {
+            if (!seen_mime) {
+                print mime_type
+                seen_mime = 1
+            }
+            in_action = 1
+            print
+            next
+        }
+        /^\[/ {
+            in_action = 0
+            print
+            next
+        }
+        /^MimeType=/ {
+            if (!in_action && !seen_mime) {
+                print mime_type
+                seen_mime = 1
+            }
+            next
+        }
+        /^Actions=/ {
+            if (!seen_mime) {
+                print mime_type
+                seen_mime = 1
+            }
+            print
+            next
+        }
+        {
+            print
+        }
+        END {
+            if (!seen_mime) {
+                print mime_type
+            }
+        }
+    ' "$dst" >"$tmp"
+    install -m 0644 "$tmp" "$dst"
+    rm -f -- "$tmp"
+}
+
 copy_local_bin_if_exists() {
     local name="$1"
     local src="$HOME/.local/bin/$name"
@@ -97,6 +150,7 @@ copy_dir .config/environment.d
 copy_dir .config/ghostty
 copy_dir .config/mako
 copy_dir .config/nvim --exclude '.git/'
+copy_dir .config/xdg-desktop-portal
 copy_file_if_exists .config/mimeapps.list
 copy_file_if_exists .config/starship.toml
 
@@ -105,6 +159,7 @@ if [ -f "$HOME/.config/tmux/tmux.conf.local" ]; then
 fi
 
 copy_file_if_exists .local/share/applications/google-chrome.desktop
+normalize_google_chrome_desktop
 
 copy_file_if_exists .zshrc
 copy_file_if_exists .gitconfig
