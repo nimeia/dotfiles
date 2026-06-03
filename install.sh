@@ -62,6 +62,7 @@ install_user() {
         .config/mimeapps.list \
         .config/niri \
         .config/nvim \
+        .config/swaylock \
         .config/waybar \
         .config/wlogout \
         .local/share/applications/google-chrome.desktop \

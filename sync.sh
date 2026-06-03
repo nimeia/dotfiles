@@ -11,6 +11,7 @@ copy_dir() {
     local resolved_dst
 
     shift
+    [ -d "$src" ] || [ -L "$src" ] || return 0
     resolved_src="$(readlink -f -- "$src" 2>/dev/null || true)"
     resolved_dst="$(readlink -m -- "$dst" 2>/dev/null || printf '%s' "$dst")"
     if [ -n "$resolved_src" ] && [ "$resolved_src" = "$resolved_dst" ]; then
@@ -87,6 +88,7 @@ copy_bashrc() {
 
 copy_dir .config/niri --exclude '*.backup-*'
 copy_dir .config/waybar --exclude '*.backup-*' --exclude 'config.jsonc' --exclude 'scripts/playerctl-status-new'
+copy_dir .config/swaylock --exclude '*.backup-*'
 copy_dir .config/fcitx5 --exclude '*.backup-*' --exclude 'conf/cached_layouts' --exclude 'conf/chttrans.conf'
 copy_dir .config/doom --exclude '.local/' --exclude '*.elc'
 copy_dir .config/fuzzel --exclude '*.backup-*'

@@ -65,6 +65,7 @@ required_repo_files=(
     "$repo_dir/home/.local/bin/screen-brightness"
     "$repo_dir/home/.local/bin/wallpaper-random"
     "$repo_dir/home/.local/bin/window-opacity"
+    "$repo_dir/home/.config/swaylock/config"
     "$repo_dir/home/.local/share/applications/google-chrome.desktop"
     "$repo_dir/home/.local/share/wallpapers/default.png"
     "$repo_dir/home/.local/share/wallpapers/niri-overview.png"
