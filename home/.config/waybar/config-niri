@@ -3,7 +3,7 @@
     "group/leftside"
   ],
   "modules-center": [
-    "niri/window"
+    "group/windowcenter"
   ],
   "layer": "bottom",
   "exclusive": true,
@@ -15,6 +15,39 @@
   "niri/window": {
     "format": " {} ",
     "separate-outputs": false
+  },
+  "group/windowcenter": {
+    "orientation": "horizontal",
+    "modules": [
+      "niri/window",
+      "group/windowactions"
+    ]
+  },
+  "group/windowactions": {
+    "orientation": "horizontal",
+    "modules": [
+      "custom/window-maximize",
+      "custom/window-fullscreen",
+      "custom/window-close"
+    ]
+  },
+  "custom/window-maximize": {
+    "format": "󰖯",
+    "tooltip": true,
+    "tooltip-format": "最大化当前程序",
+    "on-click": "niri msg action maximize-column"
+  },
+  "custom/window-fullscreen": {
+    "format": "󰊓",
+    "tooltip": true,
+    "tooltip-format": "全屏显示当前程序",
+    "on-click": "niri-fullscreen --toggle"
+  },
+  "custom/window-close": {
+    "format": "󰅖",
+    "tooltip": true,
+    "tooltip-format": "关闭当前程序",
+    "on-click": "niri msg action close-window"
   },
   "group/leftside": {
     "orientation": "horizontal",

@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}"
+state_file="$state_dir/screen-brightness.previous"
+dim_percent="${SCREEN_BRIGHTNESS_DIM_PERCENT:-15}"
+restore_percent="${SCREEN_BRIGHTNESS_RESTORE_PERCENT:-60}"
+step_percent="${SCREEN_BRIGHTNESS_STEP_PERCENT:-5}"
+
+usage() {
+    cat <<'EOF'
+Usage: screen-brightness --up|--down|--toggle|--status
+
+Controls the default backlight device through brightnessctl.
+EOF
+}
+
+current_percent() {
+    brightnessctl -m | awk -F, '{ gsub(/%/, "", $4); print int($4); exit }'
+}
+
+clamp_percent() {
+    local value="$1"
+    if [ "$value" -lt 1 ]; then
+        printf '1\n'
+    elif [ "$value" -gt 100 ]; then
+        printf '100\n'
+    else
+        printf '%s\n' "$value"
+    fi
+}
+
+set_percent() {
+    local value
+    value="$(clamp_percent "$1")"
+    brightnessctl set "${value}%" >/dev/null
+}
+
+change_percent() {
+    local delta="$1"
+    local current next
+    current="$(current_percent)"
+    next="$((current + delta))"
+    set_percent "$next"
+}
+
+toggle_dim() {
+    local current target
+    current="$(current_percent)"
+    if [ "$current" -gt "$dim_percent" ]; then
+        mkdir -p -- "$state_dir"
+        printf '%s\n' "$current" >"$state_file"
+        set_percent "$dim_percent"
+        return
+    fi
+
+    if [ -r "$state_file" ]; then
+        target="$(sed -n '1p' "$state_file")"
+    else
+        target="$restore_percent"
+    fi
+
+    case "$target" in
+        ''|*[!0-9]*) target="$restore_percent" ;;
+    esac
+
+    if [ "$target" -le "$dim_percent" ]; then
+        target="$restore_percent"
+    fi
+
+    set_percent "$target"
+}
+
+case "${1:-}" in
+    --up)
+        change_percent "$step_percent"
+        ;;
+    --down)
+        change_percent "-$step_percent"
+        ;;
+    --toggle)
+        toggle_dim
+        ;;
+    --status)
+        brightnessctl info
+        ;;
+    -h|--help)
+        usage
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac

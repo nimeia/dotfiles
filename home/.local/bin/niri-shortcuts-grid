@@ -46,7 +46,7 @@ GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
         (
             Hotkey("Alt F4 / Mod Q", "关闭当前窗口", niri_action=("close-window",), focus_target=True, requires_target=True),
             Hotkey("Mod F", "最大化当前列", niri_action=("maximize-column",), focus_target=True, requires_target=True),
-            Hotkey("Mod Shift F", "全屏当前窗口", niri_action=("fullscreen-window",), focus_target=True, requires_target=True),
+            Hotkey("Mod Shift F", "全屏当前窗口", argv=("niri-fullscreen", "--toggle"), focus_target=True, requires_target=True),
             Hotkey("Mod M / Up", "最大化到屏幕边缘", niri_action=("maximize-window-to-edges",), focus_target=True, requires_target=True),
             Hotkey("Mod V", "切换浮动或平铺", niri_action=("toggle-window-floating",), focus_target=True, requires_target=True),
             Hotkey("Mod Shift V", "切换浮动/平铺焦点", niri_action=("switch-focus-between-floating-and-tiling",), focus_target=True, requires_target=True),

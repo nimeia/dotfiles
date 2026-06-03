@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+TOLERANCE = 6.0
+
+
+def escape_bind_path() -> Path:
+    base = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+    return base / "niri-fullscreen-escape.kdl"
+
+
+def ensure_niri_socket() -> bool:
+    if os.environ.get("NIRI_SOCKET"):
+        return True
+
+    runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+    candidates = sorted(
+        runtime_dir.glob("niri*.sock"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    if not candidates:
+        return False
+
+    os.environ["NIRI_SOCKET"] = str(candidates[-1])
+    return True
+
+
+def run_quiet(argv: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+
+
+def niri_json(*args: str) -> dict[str, object] | None:
+    if not ensure_niri_socket() or not shutil.which("niri"):
+        return None
+
+    result = run_quiet(("niri", "msg", "-j", *args))
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    return data if isinstance(data, dict) else None
+
+
+def niri_action(*args: str) -> bool:
+    if not ensure_niri_socket() or not shutil.which("niri"):
+        return False
+
+    result = run_quiet(("niri", "msg", "action", *args))
+    return result.returncode == 0
+
+
+def load_config() -> None:
+    niri_action("load-config-file")
+
+
+def write_escape_bind() -> None:
+    path = escape_bind_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        'binds {\n'
+        '    Escape repeat=false hotkey-overlay-title="退出全屏" { spawn "niri-fullscreen" "--exit"; }\n'
+        '}\n'
+    )
+
+
+def remove_escape_bind() -> None:
+    try:
+        escape_bind_path().unlink()
+    except FileNotFoundError:
+        pass
+
+
+def focused_window_size() -> tuple[float, float] | None:
+    data = niri_json("focused-window")
+    if not data:
+        return None
+
+    layout = data.get("layout")
+    if not isinstance(layout, dict):
+        return None
+
+    size = layout.get("window_size") or layout.get("tile_size")
+    if not isinstance(size, list | tuple) or len(size) != 2:
+        return None
+
+    try:
+        return float(size[0]), float(size[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def focused_output_size() -> tuple[float, float] | None:
+    data = niri_json("focused-output")
+    if not data:
+        return None
+
+    logical = data.get("logical")
+    if not isinstance(logical, dict):
+        return None
+
+    try:
+        return float(logical["width"]), float(logical["height"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def focused_window_looks_fullscreen() -> bool:
+    window_size = focused_window_size()
+    output_size = focused_output_size()
+    if not window_size or not output_size:
+        return False
+
+    window_width, window_height = window_size
+    output_width, output_height = output_size
+    return (
+        window_width >= output_width - TOLERANCE
+        and window_height >= output_height - TOLERANCE
+        and window_width <= output_width + TOLERANCE
+        and window_height <= output_height + TOLERANCE
+    )
+
+
+def enable_escape_then_fullscreen() -> int:
+    write_escape_bind()
+    load_config()
+    if not niri_action("fullscreen-window"):
+        remove_escape_bind()
+        load_config()
+        return 1
+    return 0
+
+
+def exit_fullscreen() -> int:
+    if focused_window_looks_fullscreen():
+        niri_action("fullscreen-window")
+    remove_escape_bind()
+    load_config()
+    return 0
+
+
+def toggle_fullscreen() -> int:
+    if focused_window_looks_fullscreen():
+        return exit_fullscreen()
+    return enable_escape_then_fullscreen()
+
+
+def usage() -> None:
+    print("Usage: niri-fullscreen [--toggle|--exit|--status]", file=sys.stderr)
+
+
+def main() -> int:
+    action = sys.argv[1] if len(sys.argv) > 1 else "--toggle"
+    if action == "--toggle":
+        return toggle_fullscreen()
+    if action == "--exit":
+        return exit_fullscreen()
+    if action == "--status":
+        print("fullscreen" if focused_window_looks_fullscreen() else "windowed")
+        return 0
+    if action in {"-h", "--help"}:
+        usage()
+        return 0
+
+    usage()
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -20,9 +20,20 @@
       "clock#date"
     ]
   },
+  "group/battery": {
+    "orientation": "horizontal",
+    "modules": [
+      "battery#prefix",
+      "battery#suffix"
+    ]
+  },
   "battery#prefix": {
+    "bat": "BAT0",
+    "adapter": "ADP0",
     "format": " {icon}",
     "format-charging": " 󰂄",
+    "format-plugged": " 󰂄",
+    "format-full": " 󰁹",
     "format-icons": [
       "󰁺",
       "󰁼",
@@ -30,11 +41,28 @@
       "󰂁",
       "󰁹"
     ],
-    "interval": 1
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "interval": 10,
+    "tooltip": false
   },
   "battery#suffix": {
+    "bat": "BAT0",
+    "adapter": "ADP0",
     "format": "{capacity}%",
-    "interval": 1
+    "format-charging": "{capacity}%",
+    "format-plugged": "{capacity}%",
+    "format-full": "{capacity}%",
+    "format-time": "{H}h {M}m",
+    "tooltip": true,
+    "tooltip-format": "电池: {capacity}%\n功耗: {power}W\n预计时间: {time}",
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "interval": 10
   },
   "privacy": {
     "icon-size": 12,
@@ -163,8 +191,8 @@
     "format": "{usage}%"
   },
   "pulseaudio#prefix": {
-    "format": " {icon} {volume}% ",
-    "format-muted": " 󰝟 静音 ",
+    "format": "{icon} {volume}%",
+    "format-muted": "󰝟 静音",
     "format-icons": {
       "default": [
         "󰕿",
@@ -181,6 +209,22 @@
     "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
     "scroll-step": 5,
     "max-volume": 100,
+    "smooth-scrolling-threshold": 1
+  },
+  "backlight#brightness": {
+    "format": "{icon} {percent}%",
+    "format-icons": [
+      "󰃞",
+      "󰃟",
+      "󰃠"
+    ],
+    "tooltip": true,
+    "tooltip-format": "屏幕亮度: {percent}%\n滚轮调节亮度，左键低亮度/恢复，右键查看背光信息",
+    "on-click": "screen-brightness --toggle",
+    "on-click-right": "ghostty -e sh -lc 'brightnessctl info; printf \"\\n按回车关闭\"; read _'",
+    "on-scroll-up": "screen-brightness --up",
+    "on-scroll-down": "screen-brightness --down",
+    "scroll-step": 5,
     "smooth-scrolling-threshold": 1
   },
   "wireplumber#prefix": {

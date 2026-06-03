@@ -2,6 +2,8 @@
 set -euo pipefail
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+pycache_dir="$(mktemp -d)"
+trap 'rm -rf -- "$pycache_dir"' EXIT
 
 bash -n \
     "$repo_dir/install.sh" \
@@ -10,7 +12,8 @@ bash -n \
     "$repo_dir/scripts/install-external.sh" \
     "$repo_dir/scripts/install-niri-source.sh"
 
-python3 -m py_compile \
+PYTHONPYCACHEPREFIX="$pycache_dir" python3 -m py_compile \
+    "$repo_dir/home/.local/bin/niri-fullscreen" \
     "$repo_dir/home/.local/bin/niri-shortcuts-grid" \
     "$repo_dir/home/.local/bin/window-opacity"
 
@@ -21,6 +24,7 @@ if command -v shellcheck >/dev/null 2>&1; then
         "$repo_dir/check.sh"
         "$repo_dir/scripts/install-external.sh"
         "$repo_dir/scripts/install-niri-source.sh"
+        "$repo_dir/home/.local/bin/screen-brightness"
         "$repo_dir/home/.local/bin/niri-overview-wallpaper"
         "$repo_dir/home/.local/bin/niri-settings-menu"
         "$repo_dir/home/.local/bin/wallpaper-random"
@@ -54,9 +58,11 @@ python3 -m json.tool "$repo_dir/home/.config/waybar/config-common-tiling" >/dev/
 python3 -m json.tool "$repo_dir/home/.config/waybar/config-niri" >/dev/null
 
 required_repo_files=(
+    "$repo_dir/home/.local/bin/niri-fullscreen"
     "$repo_dir/home/.local/bin/niri-overview-wallpaper"
     "$repo_dir/home/.local/bin/niri-settings-menu"
     "$repo_dir/home/.local/bin/niri-shortcuts-grid"
+    "$repo_dir/home/.local/bin/screen-brightness"
     "$repo_dir/home/.local/bin/wallpaper-random"
     "$repo_dir/home/.local/bin/window-opacity"
     "$repo_dir/home/.local/share/applications/google-chrome.desktop"

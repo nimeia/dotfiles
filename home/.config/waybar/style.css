@@ -8,16 +8,19 @@
 
 #leftside,
 #window,
+#windowactions,
 #clock.centered,
 #rightside {
   box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.58);
 }
 
 window#waybar.solo #window,
+window#waybar.solo #windowactions,
 window#waybar.solo #leftside,
 window#waybar.solo #clock.centered,
 window#waybar.solo #rightside,
-window#waybar.empty #window {
+window#waybar.empty #window,
+window#waybar.empty #windowactions {
   box-shadow: initial;
 }
 
@@ -90,6 +93,13 @@ window {
   margin: 8px 8px 8px 8px;
 }
 
+#windowactions {
+  background: @bg-color;
+  border-radius: 16px;
+  margin: 8px 8px 8px 0px;
+  padding: 2px 4px;
+}
+
 #tray {
   padding: 0px 0px 0px 8px;
 }
@@ -98,11 +108,22 @@ window {
   padding: 0px 0px 0px 8px;
 }
 
-#pulseaudio.prefix {
+#pulseaudio.prefix,
+#backlight.brightness {
   border-radius: 12px;
   padding: 0px 8px;
   margin: 0px 2px;
   transition: background 0.15s ease-in, color 0.15s ease-in;
+}
+
+#pulseaudio.prefix {
+  margin-right: 0px;
+  padding-right: 3px;
+}
+
+#backlight.brightness {
+  margin-left: 0px;
+  padding-left: 3px;
 }
 
 #custom-shortcuts,
@@ -116,19 +137,48 @@ window {
   transition: background 0.15s ease-in, color 0.15s ease-in;
 }
 
-#pulseaudio.prefix:hover {
+#custom-window-maximize,
+#custom-window-fullscreen,
+#custom-window-close {
+  border-radius: 12px;
+  font-size: 16px;
+  margin: 0px;
+  min-width: 0px;
+  padding: 0px 5px;
+  transition: background 0.15s ease-in, color 0.15s ease-in;
+}
+
+#pulseaudio.prefix:hover,
+#backlight.brightness:hover {
   background: @selected-bg-color;
   color: @selected-fg-color;
 }
 
 #custom-shortcuts:hover,
 #custom-wallpaper:hover,
-#custom-opacity:hover {
+#custom-opacity:hover,
+#custom-window-maximize:hover,
+#custom-window-fullscreen:hover {
   background: @selected-bg-color;
   color: @selected-fg-color;
 }
 
+#custom-window-close:hover {
+  background: @love;
+  color: @selected-fg-color;
+}
+
 #pulseaudio.prefix.muted {
+  color: @love;
+}
+
+#battery.prefix.warning,
+#battery.suffix.warning {
+  color: @gold;
+}
+
+#battery.prefix.critical,
+#battery.suffix.critical {
   color: @love;
 }
 
@@ -160,8 +210,25 @@ window#waybar.solo #window {
 
 
 window#waybar.empty #window,
-window#waybar.solo #window {
+window#waybar.empty #windowactions,
+window#waybar.solo #window,
+window#waybar.solo #windowactions {
   background: transparent;
+}
+
+window#waybar.empty #windowactions {
+  margin: 0px;
+  padding: 0px;
+}
+
+window#waybar.empty #custom-window-maximize,
+window#waybar.empty #custom-window-fullscreen,
+window#waybar.empty #custom-window-close {
+  font-size: 0px;
+  margin: 0px;
+  min-width: 0px;
+  opacity: 0;
+  padding: 0px;
 }
 
 window#waybar.floating,

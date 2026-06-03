@@ -18,6 +18,7 @@
       "cpu",
       "custom/memoryprefix",
       "memory",
+      "group/battery",
       "custom/timeprefix",
       "group/datetime"
     ]
@@ -26,6 +27,7 @@
     "orientation": "horizontal",
     "modules": [
       "pulseaudio#prefix",
+      "backlight#brightness",
       "custom/shortcuts",
       "custom/wallpaper",
       "custom/opacity",

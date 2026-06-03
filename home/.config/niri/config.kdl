@@ -430,6 +430,9 @@ window-rule {
 
 // Runtime-generated current-app opacity rule.
 include optional=true "~/.local/state/window-opacity.kdl"
+// Runtime-generated Esc binding that is present only after niri-fullscreen
+// enters fullscreen, so regular application Esc handling stays intact.
+include optional=true "~/.local/state/niri-fullscreen-escape.kdl"
 
 binds {
     // Keys consist of modifiers separated by + signs, followed by an XKB key name
@@ -670,7 +673,7 @@ binds {
     Mod+Ctrl+R hotkey-overlay-title="重置窗口高度" { reset-window-height; }
 
     Mod+F hotkey-overlay-title="最大化当前列" { maximize-column; }
-    Mod+Shift+F hotkey-overlay-title="全屏当前窗口" { fullscreen-window; }
+    Mod+Shift+F hotkey-overlay-title="全屏当前窗口" { spawn "niri-fullscreen" "--toggle"; }
     Mod+B hotkey-overlay-title="显示/隐藏状态栏" { spawn "killall" "-SIGUSR1" "waybar"; }
     Mod+Shift+Q hotkey-overlay-title="打开电源菜单" { spawn "wlogout" "--buttons-per-row" "5" "--column-spacing" "12" "--row-spacing" "12" "--margin" "275"; }
 

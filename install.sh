@@ -173,6 +173,19 @@ install_rust_analyzer() {
     rm -f -- "$tmp"
 }
 
+ensure_backlight_access() {
+    if ! getent group video >/dev/null 2>&1; then
+        return
+    fi
+
+    if id -nG "$USER" | tr ' ' '\n' | grep -qx video; then
+        return
+    fi
+
+    sudo usermod -aG video "$USER"
+    printf 'Added %s to the video group for backlight controls. Log out and back in for it to apply.\n' "$USER"
+}
+
 install_python_tool_shims() {
     mkdir -p -- "$HOME/.local/bin"
 
@@ -190,6 +203,7 @@ install_python_tool_shims() {
 install_packages() {
     sudo apt update
     grep -vE '^\s*(#|$)' "$repo_dir/packages/apt.txt" | xargs -r sudo apt install -y
+    ensure_backlight_access
     install_npm_globals
     install_rust_analyzer
     install_python_tool_shims
