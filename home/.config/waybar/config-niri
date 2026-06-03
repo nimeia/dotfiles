@@ -35,7 +35,7 @@
     "format": "󰖯",
     "tooltip": true,
     "tooltip-format": "最大化当前程序",
-    "on-click": "niri msg action maximize-column"
+    "on-click": "niri msg action maximize-window-to-edges"
   },
   "custom/window-fullscreen": {
     "format": "󰊓",
