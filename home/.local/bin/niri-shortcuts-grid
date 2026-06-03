@@ -229,6 +229,12 @@ def focus_window(window_id: int | None) -> bool:
     return run_quiet(("niri", "msg", "action", "focus-window", "--id", str(window_id))).returncode == 0
 
 
+def place_shortcuts_window(window_id: int) -> None:
+    run_quiet(("niri", "msg", "action", "set-window-width", "--id", str(window_id), "1040"))
+    run_quiet(("niri", "msg", "action", "set-window-height", "--id", str(window_id), "720"))
+    run_quiet(("niri", "msg", "action", "center-window", "--id", str(window_id)))
+
+
 def focus_existing_shortcuts() -> bool:
     ids = shortcut_window_ids()
     if not ids:
@@ -239,9 +245,7 @@ def focus_existing_shortcuts() -> bool:
 
     current_id = ids[-1]
     focus_window(current_id)
-    run_quiet(("niri", "msg", "action", "set-window-width", "--id", str(current_id), "1040"))
-    run_quiet(("niri", "msg", "action", "set-window-height", "--id", str(current_id), "720"))
-    run_quiet(("niri", "msg", "action", "center-window", "--id", str(current_id)))
+    place_shortcuts_window(current_id)
     return True
 
 
@@ -293,18 +297,18 @@ def hotkey_runner(item: Hotkey, target_id: int | None, close: Callable[[], None]
     return run
 
 
-def load_gtk() -> tuple[object, object, object, object]:
+def load_gtk() -> tuple[object, object, object, object, object]:
     import gi
 
     gi.require_version("Gdk", "4.0")
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gdk, Gio, Gtk, Pango
+    from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
-    return Gtk, Gdk, Gio, Pango
+    return Gtk, Gdk, Gio, GLib, Pango
 
 
 def build_ui(app: object, target_id: int | None) -> None:
-    Gtk, Gdk, _Gio, Pango = load_gtk()
+    Gtk, Gdk, _Gio, GLib, Pango = load_gtk()
 
     css = """
     window {
@@ -480,9 +484,18 @@ def build_ui(app: object, target_id: int | None) -> None:
     window.present()
 
     if os.environ.get("NIRI_SOCKET") and shutil.which("niri"):
-        run_quiet(("niri", "msg", "action", "set-window-width", "1040"))
-        run_quiet(("niri", "msg", "action", "set-window-height", "720"))
-        run_quiet(("niri", "msg", "action", "center-window"))
+        attempts = {"left": 10}
+
+        def place_presented_window() -> bool:
+            ids = shortcut_window_ids()
+            if ids:
+                place_shortcuts_window(ids[-1])
+                return False
+
+            attempts["left"] -= 1
+            return attempts["left"] > 0
+
+        GLib.timeout_add(50, place_presented_window)
 
 
 def main() -> int:
@@ -497,7 +510,7 @@ def main() -> int:
     if focus_existing_shortcuts():
         return 0
 
-    Gtk, _Gdk, Gio, _Pango = load_gtk()
+    Gtk, _Gdk, Gio, _GLib, _Pango = load_gtk()
     target_id = focused_window_id()
 
     app = Gtk.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)

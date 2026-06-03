@@ -67,6 +67,7 @@ foot
 alacritty
 zsh
 fish
+starship
 
 # Development tools
 git

@@ -98,6 +98,7 @@ copy_dir .config/ghostty
 copy_dir .config/mako
 copy_dir .config/nvim --exclude '.git/'
 copy_file_if_exists .config/mimeapps.list
+copy_file_if_exists .config/starship.toml
 
 if [ -f "$HOME/.config/tmux/tmux.conf.local" ]; then
     install -D -m 0644 "$HOME/.config/tmux/tmux.conf.local" "$repo_dir/home/.config/tmux/tmux.conf.local"

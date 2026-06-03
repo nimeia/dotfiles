@@ -65,6 +65,7 @@ required_repo_files=(
     "$repo_dir/home/.local/bin/screen-brightness"
     "$repo_dir/home/.local/bin/wallpaper-random"
     "$repo_dir/home/.local/bin/window-opacity"
+    "$repo_dir/home/.config/starship.toml"
     "$repo_dir/home/.config/swaylock/config"
     "$repo_dir/home/.local/share/applications/google-chrome.desktop"
     "$repo_dir/home/.local/share/wallpapers/default.png"
@@ -98,6 +99,15 @@ if [ -n "$secret_hits" ]; then
     printf '%s\n' "$secret_hits"
     printf 'Potential secret-like text found; review before pushing.\n' >&2
     exit 1
+fi
+
+if command -v starship >/dev/null 2>&1; then
+    HOME="$pycache_dir" \
+        XDG_CACHE_HOME="$pycache_dir/.cache" \
+        STARSHIP_CONFIG="$repo_dir/home/.config/starship.toml" \
+        starship prompt >/dev/null
+else
+    printf 'starship is not installed; skipping prompt config validation.\n'
 fi
 
 printf 'Dotfiles checks passed.\n'
