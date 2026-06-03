@@ -40,6 +40,8 @@ input {
         accel-speed 0.2
         // accel-profile "flat"
         scroll-method "two-finger"
+        tap-button-map "left-right-middle"
+        click-method "clickfinger"
         // disabled-on-external-mouse
     }
 
