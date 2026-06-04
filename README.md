@@ -52,10 +52,11 @@ cd ~/dotfiles
 ./bootstrap.sh --dry-run
 ```
 
-Doom Emacs 的完整安装默认跳过，需要时显式启用：
+Doom Emacs 的完整安装默认会执行，以免首次启动 Emacs 时 Doom 包和 env 尚未初始化。
+只想先跳过 Emacs 时：
 
 ```bash
-./bootstrap.sh --with-doom
+./bootstrap.sh --skip-doom
 ```
 
 下面是等价的手动顺序。这些脚本有依赖关系，排查问题时建议按下面顺序执行。
@@ -106,7 +107,7 @@ swww/swww-daemon、Nerd Font Symbols、壁纸集合，以及 apt 中可用的 Gh
 它还会把默认显示管理器设回 `greetd`，并禁用 `gdm/gdm3`。这一步应放在 niri 已经安装之后，
 否则重启进入 niri 会话时可能找不到 `/usr/local/bin/niri`。
 
-5. 可选：安装 Doom Emacs 配置和包：
+5. 安装 Doom Emacs 配置和包：
 
 ```bash
 ./install.sh --doom

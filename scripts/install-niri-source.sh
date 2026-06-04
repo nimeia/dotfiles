@@ -4,6 +4,9 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd -- "$script_dir/.." && pwd)"
 
+# shellcheck source=scripts/lib/apt.sh
+. "$repo_dir/scripts/lib/apt.sh"
+
 niri_repo="https://github.com/niri-wm/niri.git"
 niri_ref="${NIRI_REF:-}"
 source_dir="${NIRI_SOURCE_DIR:-$HOME/.local/src/niri}"
@@ -162,11 +165,11 @@ install_dependencies() {
     )
 
     log "install niri build and recommended runtime dependencies"
-    sudo apt update
-    sudo apt install -y "${packages[@]}"
+    apt_update
+    apt_install "${packages[@]}"
 
     if [ "$with_gnome_portal" -eq 1 ]; then
-        sudo apt install --no-install-recommends -y xdg-desktop-portal-gnome
+        apt_install_no_recommends xdg-desktop-portal-gnome
     fi
 }
 

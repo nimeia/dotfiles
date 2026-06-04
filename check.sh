@@ -10,6 +10,7 @@ bash -n \
     "$repo_dir/install.sh" \
     "$repo_dir/sync.sh" \
     "$repo_dir/check.sh" \
+    "$repo_dir/scripts/lib/apt.sh" \
     "$repo_dir/scripts/install-external.sh" \
     "$repo_dir/scripts/install-niri-source.sh" \
     "$repo_dir/scripts/install-xwayland-satellite.sh" \
@@ -26,6 +27,7 @@ if command -v shellcheck >/dev/null 2>&1; then
         "$repo_dir/bootstrap.sh"
         "$repo_dir/sync.sh"
         "$repo_dir/check.sh"
+        "$repo_dir/scripts/lib/apt.sh"
         "$repo_dir/scripts/install-external.sh"
         "$repo_dir/scripts/install-niri-source.sh"
         "$repo_dir/scripts/install-xwayland-satellite.sh"

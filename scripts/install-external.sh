@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_dir="$(cd -- "$script_dir/.." && pwd)"
 force=0
 wallpapers_only=0
 export PATH="$HOME/.local/bin:$PATH"
+
+# shellcheck source=scripts/lib/apt.sh
+. "$repo_dir/scripts/lib/apt.sh"
 
 usage() {
     cat <<'EOF'
@@ -115,11 +120,11 @@ install_apt_dependencies() {
     )
 
     log "install apt prerequisites and optional desktop helpers"
-    sudo apt update
-    sudo apt install -y "${required[@]}"
+    apt_update
+    apt_install "${required[@]}"
 
     if apt_has_package ghostty; then
-        sudo apt install -y ghostty
+        apt_install ghostty
     else
         warn "ghostty is not available from apt on this system; the local Ghostty bundle is still supported if installed under ~/.local/ghostty"
     fi
@@ -158,7 +163,7 @@ install_chrome() {
     tmp="$(mktemp -d)"
     log "download and install Google Chrome"
     download "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" "$tmp/google-chrome.deb"
-    sudo apt install -y "$tmp/google-chrome.deb"
+    apt_install "$tmp/google-chrome.deb"
     rm -rf -- "$tmp"
     set_chrome_as_default
 }

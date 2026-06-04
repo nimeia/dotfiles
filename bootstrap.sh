@@ -10,7 +10,7 @@ skip_external=0
 skip_niri_source=0
 skip_system=0
 skip_check=0
-with_doom=0
+with_doom=1
 niri_ref="${NIRI_REF:-}"
 sudo_ready=0
 ran_steps=0
@@ -25,6 +25,7 @@ current Ubuntu environment and installed tools, then only runs missing phases.
 Options:
   --dry-run           Print the detected plan without changing the system.
   --with-doom         Run Doom Emacs install after the desktop is configured.
+  --skip-doom         Do not install or sync Doom Emacs packages/env.
   --niri-ref REF      Build a specific niri ref, such as v26.04 or a commit.
   --skip-packages     Do not install apt packages or base tool shims.
   --skip-external     Do not install Chrome/Yazi/swww/fonts/wallpapers.
@@ -42,6 +43,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --with-doom)
             with_doom=1
+            ;;
+        --skip-doom)
+            with_doom=0
             ;;
         --niri-ref)
             [ "$#" -ge 2 ] || {
@@ -185,6 +189,28 @@ font_ready() {
         fc-match -f '%{family}\n' 'Symbols Nerd Font Mono' | grep -qx 'Symbols Nerd Font Mono'
 }
 
+neovim_lazy_ready() {
+    local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+    [ -f "$data_home/nvim/lazy/lazy.nvim/lua/lazy/init.lua" ]
+}
+
+doom_ready() {
+    local doom_dir="$HOME/.config/doom"
+    local doom_src="$repo_dir/home/.config/doom"
+    local emacs_dir="$HOME/.config/emacs"
+    local profile="$emacs_dir/.local/cache/profiles.@.el"
+    local file
+
+    [ -x "$emacs_dir/bin/doom" ] || return 1
+    [ -f "$emacs_dir/.local/env" ] || return 1
+    [ -f "$profile" ] || return 1
+    [ -L "$doom_dir" ] && [ "$(readlink -- "$doom_dir")" = "$doom_src" ] || return 1
+
+    for file in "$doom_src/init.el" "$doom_src/packages.el"; do
+        [ "$file" -nt "$profile" ] && return 1
+    done
+}
+
 external_tools_ready() {
     have google-chrome-stable &&
         have yazi &&
@@ -202,6 +228,7 @@ user_config_ready() {
         .bashrc
         .zshrc
         .gitconfig
+        .config/doom
         .config/environment.d
         .config/fcitx5
         .config/fuzzel
@@ -224,6 +251,8 @@ user_config_ready() {
         [ -e "$src" ] || [ -L "$src" ] || continue
         [ -L "$dst" ] && [ "$(readlink -- "$dst")" = "$src" ] || return 1
     done
+
+    neovim_lazy_ready || return 1
 }
 
 system_templates_ready() {
@@ -347,9 +376,13 @@ else
 fi
 
 if [ "$with_doom" -eq 1 ]; then
-    run_step "install Doom Emacs packages and env" 0 "$repo_dir/install.sh" --doom
+    if doom_ready; then
+        log "Doom Emacs packages and env already look installed"
+    else
+        run_step "install Doom Emacs packages and env" 0 "$repo_dir/install.sh" --doom
+    fi
 else
-    log "Doom Emacs full install skipped; pass --with-doom to run it"
+    warn "skipping Doom Emacs package/env sync by request; run ./install.sh --doom before starting Emacs"
 fi
 
 if [ "$skip_check" -eq 0 ]; then

@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_dir="$(cd -- "$script_dir/.." && pwd)"
+
+# shellcheck source=scripts/lib/apt.sh
+. "$repo_dir/scripts/lib/apt.sh"
+
 xwayland_satellite_repo="${XWAYLAND_SATELLITE_REPO:-https://github.com/Supreeeme/xwayland-satellite.git}"
 xwayland_satellite_ref="${XWAYLAND_SATELLITE_REF:-}"
 source_dir="${XWAYLAND_SATELLITE_SOURCE_DIR:-$HOME/.local/src/xwayland-satellite}"
@@ -130,8 +136,8 @@ install_dependencies() {
     )
 
     log "install xwayland-satellite build and runtime dependencies"
-    sudo apt update
-    sudo apt install -y "${packages[@]}"
+    apt_update
+    apt_install "${packages[@]}"
 }
 
 resolve_ref() {

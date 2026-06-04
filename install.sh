@@ -5,9 +5,12 @@ repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 backup_dir="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 export PATH="$HOME/.local/bin:$PATH"
 
+# shellcheck source=scripts/lib/apt.sh
+. "$repo_dir/scripts/lib/apt.sh"
+
 usage() {
     cat <<'EOF'
-Usage: ./install.sh [--packages|--external|--wallpapers|--xwayland-satellite|--niri-source|--system|--doom|--all]
+Usage: ./install.sh [--packages|--external|--wallpapers|--nvim|--xwayland-satellite|--niri-source|--system|--doom|--all]
 
 With no arguments, installs user dotfile symlinks and local helper scripts.
 
@@ -15,6 +18,7 @@ Options:
   --packages     Install apt packages, npm globals, rust-analyzer, and shims.
   --external     Install external tools: Chrome, Yazi, swww, fonts, wallpapers.
   --wallpapers   Install or update the Catppuccin wallpaper collection only.
+  --nvim         Install Neovim config and lazy.nvim bootstrap only.
   --xwayland-satellite
                  Build/install xwayland-satellite for niri X11 app support.
   --niri-source  Build/install niri from source; extra args are forwarded.
@@ -104,6 +108,8 @@ install_user() {
 
     install_tmux
     install_doom
+    install_neovim_lazy
+    install_emacs_shims
     install_python_tool_shims
 
     for item in "$repo_dir"/home/.local/bin/*; do
@@ -160,19 +166,96 @@ install_doom() {
     fi
 }
 
+install_neovim_lazy() {
+    local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+    local target="$data_home/nvim/lazy/lazy.nvim"
+    local lazy_module="$target/lua/lazy/init.lua"
+    local backup
+
+    if [ -f "$lazy_module" ]; then
+        return
+    fi
+
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        backup="$target.backup-$(date +%Y%m%d-%H%M%S)"
+        mv -- "$target" "$backup"
+        printf 'Moved incomplete lazy.nvim checkout to %s\n' "$backup" >&2
+    fi
+
+    mkdir -p -- "$(dirname -- "$target")"
+    git_remote clone --filter=blob:none --branch=stable https://github.com/folke/lazy.nvim.git "$target"
+}
+
+install_neovim() {
+    link_item ".config/nvim"
+    install_neovim_lazy
+}
+
+install_emacs_shims() {
+    mkdir -p -- "$HOME/.local/bin"
+
+    if [ -x /usr/bin/emacs ]; then
+        ln -sfn -- /usr/bin/emacs "$HOME/.local/bin/emacs"
+    fi
+    if [ -x /usr/bin/emacsclient ]; then
+        ln -sfn -- /usr/bin/emacsclient "$HOME/.local/bin/emacsclient"
+    fi
+}
+
+require_apt_emacs() {
+    if [ ! -x /usr/bin/emacs ]; then
+        printf 'apt Emacs was not found at /usr/bin/emacs; run ./install.sh --packages before Doom setup.\n' >&2
+        printf 'This avoids running Doom through the snap emacs wrapper, which can fail under confinement.\n' >&2
+        exit 1
+    fi
+
+    install_emacs_shims
+}
+
+refresh_doom_recipe_repositories() {
+    local repos_dir="$HOME/.config/emacs/.local/straight/repos"
+    local repo
+    local dir
+    local recipe_repos=(
+        melpa
+        nongnu-elpa
+        gnu-elpa-mirror
+        el-get
+        emacsmirror-mirror
+        org
+    )
+
+    [ -d "$repos_dir" ] || return 0
+
+    for repo in "${recipe_repos[@]}"; do
+        dir="$repos_dir/$repo"
+        [ -d "$dir/.git" ] || continue
+        git_remote -C "$dir" pull --ff-only
+    done
+}
+
 install_doom_profile() {
     install_user
     run_doom_install
 }
 
 run_doom_install() {
+    local doom="$HOME/.config/emacs/bin/doom"
+    local profile="$HOME/.config/emacs/.local/cache/profiles.@.el"
+
     if [ ! -x "$HOME/.config/emacs/bin/doom" ]; then
         printf 'Doom executable not found; check ~/.config/emacs.\n' >&2
         exit 1
     fi
 
-    "$HOME/.config/emacs/bin/doom" install -!
-    "$HOME/.config/emacs/bin/doom" env
+    require_apt_emacs
+    if [ -f "$profile" ]; then
+        refresh_doom_recipe_repositories
+        "$doom" sync -u
+    else
+        "$doom" install -!
+    fi
+    "$doom" env
 }
 
 install_npm_globals() {
@@ -233,14 +316,26 @@ install_python_tool_shims() {
 }
 
 install_packages() {
-    sudo apt update
-    grep -vE '^\s*(#|$)' "$repo_dir/packages/apt.txt" | xargs -r sudo apt install -y
+    local packages=()
+
+    apt_update
+    mapfile -t packages < <(grep -vE '^\s*(#|$)' "$repo_dir/packages/apt.txt")
+    if [ "${#packages[@]}" -gt 0 ]; then
+        apt_install "${packages[@]}"
+    fi
+
     if [ -f "$repo_dir/packages/apt-no-recommends.txt" ]; then
-        grep -vE '^\s*(#|$)' "$repo_dir/packages/apt-no-recommends.txt" | xargs -r sudo apt install --no-install-recommends -y
+        packages=()
+        mapfile -t packages < <(grep -vE '^\s*(#|$)' "$repo_dir/packages/apt-no-recommends.txt")
+        if [ "${#packages[@]}" -gt 0 ]; then
+            apt_install_no_recommends "${packages[@]}"
+        fi
     fi
     install_xwayland_satellite --skip-deps
     ensure_backlight_access
     install_npm_globals
+    install_neovim_lazy
+    install_emacs_shims
     install_rust_analyzer
     install_python_tool_shims
 }
@@ -285,6 +380,9 @@ case "${1:-}" in
         ;;
     --wallpapers)
         install_wallpapers
+        ;;
+    --nvim)
+        install_neovim
         ;;
     --xwayland-satellite)
         shift
