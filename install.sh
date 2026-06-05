@@ -55,6 +55,19 @@ git_remote() {
         "$@"
 }
 
+without_proxy_env() {
+    env \
+        -u HTTP_PROXY \
+        -u HTTPS_PROXY \
+        -u ALL_PROXY \
+        -u NO_PROXY \
+        -u http_proxy \
+        -u https_proxy \
+        -u all_proxy \
+        -u no_proxy \
+        "$@"
+}
+
 link_item() {
     local rel="$1"
     local src="$repo_dir/home/$rel"
@@ -186,6 +199,35 @@ install_neovim_lazy() {
     git_remote clone --filter=blob:none --branch=stable https://github.com/folke/lazy.nvim.git "$target"
 }
 
+repair_incomplete_doom_straight() {
+    local target="$HOME/.config/emacs/.local/straight/repos/straight.el"
+    local straight_module="$target/straight.el"
+    local backup
+
+    if [ -f "$straight_module" ]; then
+        return 0
+    fi
+
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        backup="$target.backup-$(date +%Y%m%d-%H%M%S)"
+        mv -- "$target" "$backup"
+        printf 'Moved incomplete straight.el checkout to %s\n' "$backup" >&2
+    fi
+}
+
+ensure_doom_straight_bootstrap() {
+    local target="$HOME/.config/emacs/.local/straight/repos/straight.el"
+    local straight_module="$target/straight.el"
+
+    if [ -f "$straight_module" ]; then
+        return 0
+    fi
+
+    repair_incomplete_doom_straight
+    mkdir -p -- "$(dirname -- "$target")"
+    git_remote clone --single-branch --branch develop https://github.com/radian-software/straight.el "$target"
+}
+
 install_neovim() {
     link_item ".config/nvim"
     install_neovim_lazy
@@ -242,6 +284,7 @@ install_doom_profile() {
 run_doom_install() {
     local doom="$HOME/.config/emacs/bin/doom"
     local profile="$HOME/.config/emacs/.local/cache/profiles.@.el"
+    local straight_module="$HOME/.config/emacs/.local/straight/repos/straight.el/straight.el"
 
     if [ ! -x "$HOME/.config/emacs/bin/doom" ]; then
         printf 'Doom executable not found; check ~/.config/emacs.\n' >&2
@@ -249,13 +292,29 @@ run_doom_install() {
     fi
 
     require_apt_emacs
+    ensure_doom_straight_bootstrap
     if [ -f "$profile" ]; then
         refresh_doom_recipe_repositories
-        "$doom" sync -u
+        if ! "$doom" sync -u; then
+            if [ ! -f "$straight_module" ]; then
+                ensure_doom_straight_bootstrap
+                refresh_doom_recipe_repositories
+                "$doom" sync -u
+            else
+                return 1
+            fi
+        fi
     else
-        "$doom" install -!
+        if ! "$doom" install -!; then
+            if [ ! -f "$straight_module" ]; then
+                ensure_doom_straight_bootstrap
+                "$doom" install -!
+            else
+                return 1
+            fi
+        fi
     fi
-    "$doom" env
+    without_proxy_env "$doom" env
 }
 
 install_npm_globals() {

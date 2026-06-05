@@ -30,6 +30,7 @@
       "custom/window-layout-third",
       "custom/window-layout-wide",
       "custom/window-layout-stack",
+      "custom/window-layout-reset",
       "custom/window-maximize",
       "custom/window-fullscreen",
       "custom/window-close"
@@ -62,6 +63,12 @@
     "tooltip-format": "上下堆叠布局\n右键移出底部窗口",
     "on-click": "niri-layout stack",
     "on-click-right": "niri-layout unstack"
+  },
+  "custom/window-layout-reset": {
+    "format": "↺",
+    "tooltip": true,
+    "tooltip-format": "恢复默认列宽\n并退出当前堆叠布局",
+    "on-click": "niri-layout reset"
   },
   "custom/window-maximize": {
     "format": "󰖯",

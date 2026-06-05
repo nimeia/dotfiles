@@ -23,6 +23,8 @@ home/.local/state/
 # Machine-local overrides
 /local/
 *.local
+home/.config/environment.d/proxy.conf
+!home/.config/tmux/tmux.conf.local
 
 # Tracked helper scripts/assets under the dotfiles home tree.
 !home/.local/

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+DEFAULT_COLUMN_WIDTH="94%"
+
 usage() {
     cat >&2 <<'EOF'
 Usage: niri-layout <half|third|wide|stack|unstack|reset>
@@ -10,7 +12,7 @@ Usage: niri-layout <half|third|wide|stack|unstack|reset>
   wide     Set current column to about 2/3 and adjacent column to 1/3.
   stack    Consume the right column into the current column for vertical split.
   unstack  Expel the bottom window from the current column.
-  reset    Restore the current column to the default wide layout.
+  reset    Restore the current column to the default layout.
 EOF
 }
 
@@ -73,6 +75,45 @@ set_current_column_width() {
 
 set_current_window_height() {
     action set-window-height "$1" >/dev/null
+}
+
+focused_column_window_count() {
+    local window_id=$1
+
+    niri msg -j windows 2>/dev/null | jq -r --argjson id "$window_id" '
+        . as $wins
+        | ($wins | map(select(.id == $id)) | .[0]) as $focused
+        | if $focused == null or $focused.layout.pos_in_scrolling_layout == null then
+            0
+          else
+            [
+              $wins[]
+              | select(.workspace_id == $focused.workspace_id)
+              | select(.layout.pos_in_scrolling_layout[0]? == $focused.layout.pos_in_scrolling_layout[0])
+            ]
+            | length
+          end
+    ' 2>/dev/null || printf '0\n'
+}
+
+expel_windows_until_current_is_single() {
+    local original_id=$1
+    local count next_count
+    local i
+
+    for ((i = 0; i < 12; i++)); do
+        focus_window_id "$original_id" || break
+        count="$(focused_column_window_count "$original_id")"
+        [ "$count" -gt 1 ] 2>/dev/null || break
+
+        try_action expel-window-from-column || break
+
+        focus_window_id "$original_id" || break
+        next_count="$(focused_column_window_count "$original_id")"
+        if [ "$next_count" -ge "$count" ] 2>/dev/null; then
+            break
+        fi
+    done
 }
 
 set_neighbor_column_width() {
@@ -161,7 +202,10 @@ layout_reset() {
 
     original_id="$(require_focused_window)"
     prepare_current_window
-    set_current_column_width "94%"
+    expel_windows_until_current_is_single "$original_id"
+    focus_window_id "$original_id" || true
+    try_action reset-window-height || true
+    set_current_column_width "$DEFAULT_COLUMN_WIDTH"
     try_action center-column || true
     focus_window_id "$original_id" || true
 }

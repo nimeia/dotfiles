@@ -141,6 +141,7 @@ window {
 #custom-window-layout-third,
 #custom-window-layout-wide,
 #custom-window-layout-stack,
+#custom-window-layout-reset,
 #custom-window-maximize,
 #custom-window-fullscreen,
 #custom-window-close {
@@ -165,6 +166,7 @@ window {
 #custom-window-layout-third:hover,
 #custom-window-layout-wide:hover,
 #custom-window-layout-stack:hover,
+#custom-window-layout-reset:hover,
 #custom-window-maximize:hover,
 #custom-window-fullscreen:hover {
   background: @selected-bg-color;
@@ -233,6 +235,7 @@ window#waybar.empty #custom-window-layout-half,
 window#waybar.empty #custom-window-layout-third,
 window#waybar.empty #custom-window-layout-wide,
 window#waybar.empty #custom-window-layout-stack,
+window#waybar.empty #custom-window-layout-reset,
 window#waybar.empty #custom-window-maximize,
 window#waybar.empty #custom-window-fullscreen,
 window#waybar.empty #custom-window-close {

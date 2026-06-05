@@ -288,14 +288,11 @@ spawn-sh-at-startup "export GTK_A11Y=none; exec /usr/lib/policykit-1-gnome/polki
 // Bluetooth tray applet and manager.
 spawn-at-startup "systemctl" "--user" "start" "blueman-applet.service"
 
-// Show the same tiled shortcuts panel at login that Mod+Shift+/ opens.
-spawn-sh-at-startup "sleep 1; niri-shortcuts-grid"
-
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
 // spawn-sh-at-startup "qs -c ~/source/qs/MyAwesomeShell"
 
 hotkey-overlay {
-    // Use the custom tiled shortcuts panel at startup instead.
+    // Keep the native hotkey overlay hidden at startup.
     skip-at-startup
 }
 

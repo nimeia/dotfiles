@@ -1,0 +1,5 @@
+# Local overrides for Oh My Tmux.
+#
+# Keep this file tracked so install.sh can always link a stable default.
+# Machine-specific tmux changes should stay on the machine and be merged back
+# through sync.sh only when they are worth tracking here.

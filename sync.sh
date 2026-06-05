@@ -146,7 +146,7 @@ copy_dir .config/fcitx5 --exclude '*.backup-*' --exclude 'conf/cached_layouts' -
 copy_dir .config/doom --exclude '.local/' --exclude '*.elc'
 copy_dir .config/fuzzel --exclude '*.backup-*'
 copy_dir .config/wlogout --exclude '*.backup-*'
-copy_dir .config/environment.d
+copy_dir .config/environment.d --exclude 'proxy.conf'
 copy_dir .config/ghostty
 copy_dir .config/mako
 copy_dir .config/nvim --exclude '.git/'

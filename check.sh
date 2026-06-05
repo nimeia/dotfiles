@@ -76,6 +76,7 @@ required_repo_files=(
     "$repo_dir/home/.local/bin/window-opacity"
     "$repo_dir/home/.config/starship.toml"
     "$repo_dir/home/.config/swaylock/config"
+    "$repo_dir/home/.config/tmux/tmux.conf.local"
     "$repo_dir/home/.config/xdg-desktop-portal/niri-portals.conf"
     "$repo_dir/home/.local/share/applications/google-chrome.desktop"
     "$repo_dir/home/.local/share/wallpapers/default.png"

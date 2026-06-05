@@ -197,7 +197,7 @@ git status
 - nvim 内部 `.git`
 - Warp 登录状态和本地数据库
 - 浏览器、VS Code、Zed 等应用缓存
-- 私有网络代理地址，例如 `HTTP_PROXY=http://192.168...`；通用的本机 Clash 代理保存在 `home/.config/environment.d/proxy.conf`
+- 私有网络代理地址，例如 `HTTP_PROXY=http://192.168...`；如需本机代理，可手动创建被忽略的 `home/.config/environment.d/proxy.conf`
 - 大型二进制包，例如 Ghostty bundle、Yazi bundle、Codex bundle
 - Oh my tmux 上游仓库不直接提交，由 `install.sh` 在新机器 clone 到 `~/.local/share/oh-my-tmux`
 - Doom Emacs 上游框架不直接提交，由 `install.sh` clone 到 `~/.config/emacs`
