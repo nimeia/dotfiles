@@ -170,7 +170,19 @@ install_apt_dependencies() {
 download() {
     local url="$1"
     local output="$2"
-    curl -fL --retry 5 --retry-delay 2 --connect-timeout 20 -o "$output" "$url"
+    local speed_limit="${DOTFILES_DOWNLOAD_SPEED_LIMIT:-1024}"
+    local speed_time="${DOTFILES_DOWNLOAD_SPEED_TIME:-60}"
+
+    curl -fL \
+        --retry 5 \
+        --retry-delay 2 \
+        --retry-all-errors \
+        --connect-timeout 20 \
+        --speed-limit "$speed_limit" \
+        --speed-time "$speed_time" \
+        --continue-at - \
+        -o "$output" \
+        "$url"
 }
 
 set_chrome_as_default() {
@@ -201,12 +213,17 @@ install_chrome() {
         return
     fi
 
-    local tmp
-    tmp="$(mktemp -d)"
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/downloads"
+    local deb="$cache_dir/google-chrome-stable_current_amd64.deb"
+    local partial="$deb.partial"
+
     log "download and install Google Chrome"
-    download "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" "$tmp/google-chrome.deb"
-    apt_install "$tmp/google-chrome.deb"
-    rm -rf -- "$tmp"
+    mkdir -p -- "$cache_dir"
+    if ! dpkg-deb --info "$deb" >/dev/null 2>&1; then
+        download "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" "$partial"
+        mv -- "$partial" "$deb"
+    fi
+    apt_install "$deb"
     set_chrome_as_default
 }
 
@@ -214,7 +231,13 @@ github_latest_asset_url() {
     local repo="$1"
     local pattern="$2"
 
-    curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 20 \
+    curl -fsSL \
+        --retry 5 \
+        --retry-delay 2 \
+        --retry-all-errors \
+        --connect-timeout 20 \
+        --speed-limit "${DOTFILES_DOWNLOAD_SPEED_LIMIT:-1024}" \
+        --speed-time "${DOTFILES_DOWNLOAD_SPEED_TIME:-60}" \
         "https://api.github.com/repos/$repo/releases/latest" |
         jq -r --arg pattern "$pattern" '[.assets[] | select(.name | test($pattern)) | .browser_download_url][0] // empty'
 }
@@ -309,12 +332,12 @@ install_wallpaper_collection() {
     local repo="${WALLPAPER_REPO_URL:-https://github.com/zhichaoh/catppuccin-wallpapers.git}"
     local target="${WALLPAPER_REPO_DIR:-$HOME/Pictures/Wallpapers/catppuccin-wallpapers}"
     local sparse_paths=()
-    read -r -a sparse_paths <<<"${WALLPAPER_SPARSE_PATHS:-gradients landscapes minimalistic misc patterns waves}"
+    read -r -a sparse_paths <<<"${WALLPAPER_SPARSE_PATHS:-gradients minimalistic}"
 
     apply_wallpaper_sparse_checkout() {
         if ! git_remote -C "$target" sparse-checkout set "${sparse_paths[@]}"; then
-            warn "sparse checkout failed; falling back to full checkout"
-            git -C "$target" sparse-checkout disable
+            warn "sparse checkout failed; keeping the partial sparse wallpaper checkout"
+            warn "rerun ./install.sh --wallpapers when the network is stable"
         fi
     }
 

@@ -248,21 +248,78 @@ neovim_lazy_ready() {
     [ -f "$data_home/nvim/lazy/lazy.nvim/lua/lazy/init.lua" ]
 }
 
+neovim_locked_plugins() {
+    local lock="$repo_dir/home/.config/nvim/lazy-lock.json"
+
+    [ -f "$lock" ] || return 0
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$lock" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+
+for name in sorted(data):
+    print(name)
+PY
+    else
+        sed -n 's/^[[:space:]]*"\([^"]*\)":[[:space:]]*{.*/\1/p' "$lock"
+    fi
+}
+
+neovim_plugin_ready() {
+    local dir="$1"
+
+    [ -d "$dir/.git" ] || return 1
+    git -C "$dir" rev-parse --verify HEAD >/dev/null 2>&1 || return 1
+    git -C "$dir" status --short >/dev/null 2>&1 || return 1
+}
+
+neovim_plugins_ready() {
+    local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+    local plugin
+    local dir
+
+    neovim_lazy_ready || return 1
+
+    while IFS= read -r plugin; do
+        [ -n "$plugin" ] || continue
+        [ "$plugin" != "lazy.nvim" ] || continue
+
+        dir="$data_home/nvim/lazy/$plugin"
+        neovim_plugin_ready "$dir" || return 1
+    done < <(neovim_locked_plugins)
+}
+
 doom_ready() {
     local doom_dir="$HOME/.config/doom"
     local doom_src="$repo_dir/home/.config/doom"
     local emacs_dir="$HOME/.config/emacs"
     local profile="$emacs_dir/.local/cache/profiles.@.el"
-    local file
+    local stamp="$emacs_dir/.local/state/dotfiles-doom.sha256"
 
     [ -x "$emacs_dir/bin/doom" ] || return 1
     [ -f "$emacs_dir/.local/env" ] || return 1
     [ -f "$profile" ] || return 1
     [ -L "$doom_dir" ] && [ "$(readlink -- "$doom_dir")" = "$doom_src" ] || return 1
+    [ -f "$stamp" ] || return 1
+    [ "$(doom_config_fingerprint)" = "$(cat "$stamp")" ]
+}
 
-    for file in "$doom_src/init.el" "$doom_src/packages.el"; do
-        [ "$file" -nt "$profile" ] && return 1
-    done
+doom_config_fingerprint() {
+    local doom_src="$repo_dir/home/.config/doom"
+    local file
+    local files=(
+        "$doom_src/init.el"
+        "$doom_src/packages.el"
+    )
+
+    for file in "${files[@]}"; do
+        [ -f "$file" ] || continue
+        sha256sum "$file"
+    done | sha256sum | awk '{print $1}'
 }
 
 external_tools_ready() {
@@ -313,6 +370,7 @@ user_config_ready() {
     done
 
     neovim_lazy_ready || return 1
+    neovim_plugins_ready || return 1
 }
 
 system_templates_ready() {

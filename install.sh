@@ -32,7 +32,7 @@ Options:
                  Install the niri session entry without changing the display manager.
   --system-greetd
                  Install greetd templates and switch the default display manager to greetd.
-  --doom         Install user files and Doom Emacs packages/env.
+  --doom         Install Doom Emacs config, packages, and env.
   --all          Install packages, external tools, user files, profile system files, Doom.
 EOF
 }
@@ -161,6 +161,7 @@ install_user() {
     install_tmux
     install_doom
     install_neovim_lazy
+    install_neovim_plugins
     install_emacs_shims
     install_python_tool_shims
 
@@ -238,6 +239,89 @@ install_neovim_lazy() {
     git_remote clone --filter=blob:none --branch=stable https://github.com/folke/lazy.nvim.git "$target"
 }
 
+neovim_locked_plugins() {
+    local lock="$repo_dir/home/.config/nvim/lazy-lock.json"
+
+    [ -f "$lock" ] || return 0
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$lock" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+
+for name in sorted(data):
+    print(name)
+PY
+    else
+        sed -n 's/^[[:space:]]*"\([^"]*\)":[[:space:]]*{.*/\1/p' "$lock"
+    fi
+}
+
+neovim_plugin_complete() {
+    local dir="$1"
+
+    [ -d "$dir/.git" ] || return 1
+    git -C "$dir" rev-parse --verify HEAD >/dev/null 2>&1 || return 1
+    git -C "$dir" status --short >/dev/null 2>&1 || return 1
+}
+
+repair_incomplete_neovim_plugins() {
+    local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+    local plugin
+    local dir
+    local backup
+
+    while IFS= read -r plugin; do
+        [ -n "$plugin" ] || continue
+        [ "$plugin" != "lazy.nvim" ] || continue
+
+        dir="$data_home/nvim/lazy/$plugin"
+        [ -e "$dir" ] || [ -L "$dir" ] || continue
+
+        if ! neovim_plugin_complete "$dir"; then
+            backup="$dir.backup-$(date +%Y%m%d-%H%M%S)"
+            mv -- "$dir" "$backup"
+            printf 'Moved incomplete Neovim plugin checkout to %s\n' "$backup" >&2
+        fi
+    done < <(neovim_locked_plugins)
+}
+
+run_neovim_lazy_restore() {
+    env \
+        GIT_TERMINAL_PROMPT=0 \
+        GIT_CONFIG_COUNT=3 \
+        GIT_CONFIG_KEY_0=http.version \
+        GIT_CONFIG_VALUE_0=HTTP/1.1 \
+        GIT_CONFIG_KEY_1=http.lowSpeedLimit \
+        GIT_CONFIG_VALUE_1=1024 \
+        GIT_CONFIG_KEY_2=http.lowSpeedTime \
+        GIT_CONFIG_VALUE_2=30 \
+        nvim --headless '+Lazy! restore' +qa
+}
+
+install_neovim_plugins() {
+    if ! command -v nvim >/dev/null 2>&1; then
+        printf 'skip Neovim plugin restore; nvim is not installed\n' >&2
+        return
+    fi
+    if [ ! -e "$HOME/.config/nvim/init.lua" ] && [ ! -L "$HOME/.config/nvim/init.lua" ]; then
+        printf 'skip Neovim plugin restore; ~/.config/nvim is not installed\n' >&2
+        return
+    fi
+
+    install_neovim_lazy
+    repair_incomplete_neovim_plugins
+    if retry_cmd 3 10 run_neovim_lazy_restore; then
+        return
+    fi
+
+    repair_incomplete_neovim_plugins
+    retry_cmd 2 10 run_neovim_lazy_restore
+}
+
 repair_incomplete_doom_straight() {
     local target="$HOME/.config/emacs/.local/straight/repos/straight.el"
     local straight_module="$target/straight.el"
@@ -270,6 +354,7 @@ ensure_doom_straight_bootstrap() {
 install_neovim() {
     link_item ".config/nvim"
     install_neovim_lazy
+    install_neovim_plugins
 }
 
 install_emacs_shims() {
@@ -303,7 +388,6 @@ refresh_doom_recipe_repositories() {
         gnu-elpa-mirror
         el-get
         emacsmirror-mirror
-        org
     )
 
     [ -d "$repos_dir" ] || return 0
@@ -316,7 +400,9 @@ refresh_doom_recipe_repositories() {
 }
 
 install_doom_profile() {
-    install_user
+    link_item ".config/doom"
+    install_doom
+    install_emacs_shims
     run_doom_install
 }
 
@@ -354,6 +440,27 @@ run_doom_install() {
         fi
     fi
     without_proxy_env "$doom" env
+    write_doom_config_stamp
+}
+
+doom_config_fingerprint() {
+    local file
+    local files=(
+        "$repo_dir/home/.config/doom/init.el"
+        "$repo_dir/home/.config/doom/packages.el"
+    )
+
+    for file in "${files[@]}"; do
+        [ -f "$file" ] || continue
+        sha256sum "$file"
+    done | sha256sum | awk '{print $1}'
+}
+
+write_doom_config_stamp() {
+    local state_dir="$HOME/.config/emacs/.local/state"
+
+    mkdir -p -- "$state_dir"
+    doom_config_fingerprint >"$state_dir/dotfiles-doom.sha256"
 }
 
 install_npm_globals() {
@@ -362,14 +469,53 @@ install_npm_globals() {
         return
     fi
 
+    local packages=()
+    local npm_proxy_value="${DOTFILES_NPM_PROXY:-}"
+    local http_proxy_value="${DOTFILES_NPM_HTTP_PROXY:-$npm_proxy_value}"
+    local https_proxy_value="${DOTFILES_NPM_HTTPS_PROXY:-$npm_proxy_value}"
+    local npm_args=(
+        install
+        -g
+        --prefix "$HOME/.local"
+        --progress=false
+        --loglevel=warn
+        --fetch-retries=5
+        --fetch-retry-mintimeout=10000
+        --fetch-retry-maxtimeout=120000
+        --fetch-timeout=120000
+    )
+
+    if [ -z "$http_proxy_value" ]; then
+        http_proxy_value="${HTTP_PROXY:-${http_proxy:-${ALL_PROXY:-${all_proxy:-}}}}"
+    fi
+    if [ -z "$https_proxy_value" ]; then
+        https_proxy_value="${HTTPS_PROXY:-${https_proxy:-$http_proxy_value}}"
+    fi
+
+    if [ -n "${DOTFILES_NPM_REGISTRY:-}" ]; then
+        npm_args+=(--registry "$DOTFILES_NPM_REGISTRY")
+    fi
+    if [ -n "$http_proxy_value" ]; then
+        npm_args+=(--proxy "$http_proxy_value")
+    fi
+    if [ -n "$https_proxy_value" ]; then
+        npm_args+=(--https-proxy "$https_proxy_value")
+    fi
+
     mkdir -p -- "$HOME/.local"
-    grep -vE '^\s*(#|$)' "$repo_dir/packages/npm-global.txt" |
-        xargs -r npm install -g --prefix "$HOME/.local"
+    mapfile -t packages < <(grep -vE '^\s*(#|$)' "$repo_dir/packages/npm-global.txt")
+    if [ "${#packages[@]}" -eq 0 ]; then
+        return
+    fi
+
+    retry_cmd 3 10 npm "${npm_args[@]}" "${packages[@]}"
 }
 
 install_rust_analyzer() {
     local arch
     local tmp
+    local speed_limit="${DOTFILES_DOWNLOAD_SPEED_LIMIT:-1024}"
+    local speed_time="${DOTFILES_DOWNLOAD_SPEED_TIME:-60}"
     arch="$(uname -m)"
 
     if [ "$arch" != "x86_64" ]; then
@@ -379,7 +525,15 @@ install_rust_analyzer() {
 
     mkdir -p -- "$HOME/.local/bin"
     tmp="$(mktemp)"
-    curl -L --fail --output "$tmp" \
+    retry_cmd 5 3 curl -L --fail \
+        --retry 5 \
+        --retry-delay 2 \
+        --retry-all-errors \
+        --connect-timeout 20 \
+        --speed-limit "$speed_limit" \
+        --speed-time "$speed_time" \
+        --continue-at - \
+        --output "$tmp" \
         https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-unknown-linux-gnu.gz
     gzip -dc "$tmp" >"$HOME/.local/bin/rust-analyzer"
     chmod +x -- "$HOME/.local/bin/rust-analyzer"

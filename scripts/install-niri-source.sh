@@ -183,7 +183,13 @@ resolve_ref() {
     have jq || die "jq is required to resolve the latest niri release"
 
     niri_ref="$(
-        curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 20 \
+        curl -fsSL \
+            --retry 5 \
+            --retry-delay 2 \
+            --retry-all-errors \
+            --connect-timeout 20 \
+            --speed-limit "${DOTFILES_DOWNLOAD_SPEED_LIMIT:-1024}" \
+            --speed-time "${DOTFILES_DOWNLOAD_SPEED_TIME:-60}" \
             "https://api.github.com/repos/niri-wm/niri/releases/latest" |
             jq -r '.tag_name // empty'
     )"
@@ -192,24 +198,42 @@ resolve_ref() {
     printf '%s\n' "$niri_ref"
 }
 
+clone_source() {
+    local ref="$1"
+
+    log "clone niri source"
+    mkdir -p -- "$(dirname -- "$source_dir")"
+    if git_remote clone --depth 1 --branch "$ref" "$niri_repo" "$source_dir"; then
+        return
+    fi
+
+    warn "shallow clone failed; retrying with blob filtering"
+    rm -rf -- "$source_dir"
+    git_remote clone --filter=blob:none "$niri_repo" "$source_dir"
+}
+
 prepare_source() {
     local ref="$1"
 
     if [ -d "$source_dir/.git" ]; then
         log "update existing niri source checkout"
-        git_remote -C "$source_dir" fetch --tags --prune origin
+        if ! git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1; then
+            warn "existing niri source checkout is incomplete; recloning"
+            rm -rf -- "$source_dir"
+            clone_source "$ref"
+        elif ! git_remote -C "$source_dir" fetch --tags --prune --depth 1 origin "$ref"; then
+            git_remote -C "$source_dir" fetch --tags --prune origin
+        fi
     elif [ -e "$source_dir" ]; then
         if [ "$force" -eq 1 ]; then
             log "remove non-git source directory: $source_dir"
             rm -rf -- "$source_dir"
-            git_remote clone "$niri_repo" "$source_dir"
+            clone_source "$ref"
         else
             die "$source_dir exists and is not a git checkout; pass --force to replace it"
         fi
     else
-        log "clone niri source"
-        mkdir -p -- "$(dirname -- "$source_dir")"
-        git_remote clone "$niri_repo" "$source_dir"
+        clone_source "$ref"
     fi
 
     log "checkout niri ref: $ref"
@@ -224,7 +248,8 @@ build_niri() {
     have cargo || die "cargo is required; run ./install.sh --packages or install Rust first"
 
     log "build niri release binary"
-    cargo build --release --locked --manifest-path "$source_dir/Cargo.toml"
+    export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
+    retry_cmd 3 10 cargo build --release --locked --manifest-path "$source_dir/Cargo.toml"
 }
 
 install_if_exists() {

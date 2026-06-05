@@ -39,8 +39,15 @@ require("lazy").setup({
 }, lazy_config)
 
 -- load theme
-dofile(vim.g.base46_cache .. "defaults")
-dofile(vim.g.base46_cache .. "statusline")
+local function load_base46_cache(name)
+  local file = vim.g.base46_cache .. name
+  if uv.fs_stat(file) then
+    dofile(file)
+  end
+end
+
+load_base46_cache "defaults"
+load_base46_cache "statusline"
 
 require "options"
 require "autocmds"
