@@ -1,6 +1,6 @@
 {
     "label" : "lock",
-    "action" : "swaylock",
+    "action" : "screen-lock",
     "text" : "锁屏",
     "keybind" : "l"
 }

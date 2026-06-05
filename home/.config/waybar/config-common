@@ -250,7 +250,7 @@
     "format": "  ",
     "tooltip": true,
     "tooltip-format": "打开电源菜单",
-    "on-click": "wlogout --buttons-per-row 5 --column-spacing 12 --row-spacing 12 --margin 275"
+    "on-click": "power-menu"
   },
   "custom/wallpaper": {
     "format": "󰸉",

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+wallpaper="${SWAYLOCK_WALLPAPER:-$HOME/.local/share/wallpapers/default.png}"
+swaylock_bin="${SWAYLOCK_BIN:-/usr/bin/swaylock}"
+
+if [ ! -x "$swaylock_bin" ]; then
+    printf 'screen-lock: swaylock binary not found: %s\n' "$swaylock_bin" >&2
+    exit 1
+fi
+
+if [ -f "$wallpaper" ]; then
+    exec "$swaylock_bin" --image "$wallpaper" --scaling fill "$@"
+fi
+
+exec "$swaylock_bin" "$@"

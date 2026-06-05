@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v niri >/dev/null 2>&1; then
+    printf 'niri-quit: niri command not found\n' >&2
+    exit 1
+fi
+
+if [ -z "${NIRI_SOCKET:-}" ] && command -v systemctl >/dev/null 2>&1; then
+    niri_socket="$(systemctl --user show-environment 2>/dev/null | sed -n 's/^NIRI_SOCKET=//p' || true)"
+    if [ -n "$niri_socket" ]; then
+        export NIRI_SOCKET="$niri_socket"
+    fi
+fi
+
+if [ -z "${NIRI_SOCKET:-}" ]; then
+    printf 'niri-quit: NIRI_SOCKET is not set\n' >&2
+    exit 1
+fi
+
+if [ "${NIRI_QUIT_DRY_RUN:-0}" = 1 ]; then
+    niri msg version >/dev/null
+    printf 'niri-quit: ready\n'
+    exit 0
+fi
+
+exec niri msg action quit

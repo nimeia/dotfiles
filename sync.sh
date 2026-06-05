@@ -174,7 +174,10 @@ copy_local_bin_if_exists niri-fullscreen
 copy_local_bin_if_exists niri-overview-wallpaper
 copy_local_bin_if_exists niri-settings-menu
 copy_local_bin_if_exists niri-shortcuts-grid
+copy_local_bin_if_exists power-menu
 copy_local_bin_if_exists screen-brightness
+copy_local_bin_if_exists screen-lock
+copy_local_bin_if_exists swaylock
 copy_local_bin_if_exists wallpaper-random
 copy_local_bin_if_exists window-opacity
 for item in "$repo_dir"/home/.local/bin/*; do

@@ -454,16 +454,16 @@ binds {
     Mod+Return hotkey-overlay-title="打开终端：Ghostty" { spawn "ghostty"; }
     Mod+S hotkey-overlay-title="搜索/启动应用" { spawn "fuzzel"; }
     Mod+R hotkey-overlay-title="运行命令/启动应用" { spawn "fuzzel"; }
-    Mod+E hotkey-overlay-title="打开文件管理器：Thunar" { spawn "thunar" "/home/sakura"; }
-    Mod+Alt+E hotkey-overlay-title="打开终端文件管理器：Yazi" { spawn "ghostty" "-e" "/home/sakura/.local/bin/yazi" "/home/sakura"; }
-    Mod+I hotkey-overlay-title="打开设置菜单" { spawn "/home/sakura/.local/bin/niri-settings-menu"; }
+    Mod+E hotkey-overlay-title="打开文件管理器：Thunar" { spawn-sh "exec thunar \"$HOME\""; }
+    Mod+Alt+E hotkey-overlay-title="打开终端文件管理器：Yazi" { spawn-sh "exec ghostty -e \"$HOME/.local/bin/yazi\" \"$HOME\""; }
+    Mod+I hotkey-overlay-title="打开设置菜单" { spawn-sh "exec \"$HOME/.local/bin/niri-settings-menu\""; }
     Mod+P hotkey-overlay-title="打开显示设置" { spawn "wdisplays"; }
-    Mod+X hotkey-overlay-title="打开电源菜单" { spawn "wlogout" "--buttons-per-row" "5" "--column-spacing" "12" "--row-spacing" "12" "--margin" "275"; }
+    Mod+X hotkey-overlay-title="打开电源菜单" { spawn "power-menu"; }
     Mod+D repeat=false hotkey-overlay-title="显示桌面概览" { toggle-overview; }
     Mod+Tab repeat=false hotkey-overlay-title="打开/关闭任务视图" { toggle-overview; }
     XF86Search hotkey-overlay-title="启动应用：fuzzel" { spawn "fuzzel"; }
-    Mod+L hotkey-overlay-title="锁定屏幕" { spawn "swaylock"; }
-    Super+Alt+L hotkey-overlay-title="锁定屏幕：swaylock" { spawn "swaylock"; }
+    Mod+L hotkey-overlay-title="锁定屏幕" { spawn-sh "exec \"$HOME/.local/bin/screen-lock\""; }
+    Super+Alt+L hotkey-overlay-title="锁定屏幕：swaylock" { spawn-sh "exec \"$HOME/.local/bin/screen-lock\""; }
     XF86Sleep allow-when-locked=true hotkey-overlay-title="挂起系统" { spawn "systemctl" "suspend"; }
 
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
@@ -675,7 +675,7 @@ binds {
     Mod+F hotkey-overlay-title="最大化当前列" { maximize-column; }
     Mod+Shift+F hotkey-overlay-title="全屏当前窗口" { spawn "niri-fullscreen" "--toggle"; }
     Mod+B hotkey-overlay-title="显示/隐藏状态栏" { spawn "killall" "-SIGUSR1" "waybar"; }
-    Mod+Shift+Q hotkey-overlay-title="打开电源菜单" { spawn "wlogout" "--buttons-per-row" "5" "--column-spacing" "12" "--row-spacing" "12" "--margin" "275"; }
+    Mod+Shift+Q hotkey-overlay-title="打开电源菜单" { spawn "power-menu"; }
 
     // While maximize-column leaves gaps and borders around the window,
     // maximize-window-to-edges doesn't: the window expands to the edges of the screen.
@@ -749,7 +749,7 @@ binds {
 
     // The quit action will show a confirmation dialog to avoid accidental exits.
     Mod+Shift+E hotkey-overlay-title="退出 niri" { quit; }
-    Ctrl+Alt+Delete hotkey-overlay-title="打开电源菜单" { spawn "wlogout" "--buttons-per-row" "5" "--column-spacing" "12" "--row-spacing" "12" "--margin" "275"; }
+    Ctrl+Alt+Delete hotkey-overlay-title="打开电源菜单" { spawn "power-menu"; }
 
     // Powers off the monitors. To turn them back on, do any input like
     // moving the mouse or pressing any other key.

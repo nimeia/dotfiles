@@ -14,7 +14,11 @@ bash -n \
     "$repo_dir/scripts/install-external.sh" \
     "$repo_dir/scripts/install-niri-source.sh" \
     "$repo_dir/scripts/install-xwayland-satellite.sh" \
-    "$repo_dir/home/.local/bin/niri-layout"
+    "$repo_dir/home/.local/bin/niri-layout" \
+    "$repo_dir/home/.local/bin/niri-quit" \
+    "$repo_dir/home/.local/bin/power-menu" \
+    "$repo_dir/home/.local/bin/screen-lock" \
+    "$repo_dir/home/.local/bin/swaylock"
 
 PYTHONPYCACHEPREFIX="$pycache_dir" python3 -m py_compile \
     "$repo_dir/home/.local/bin/niri-fullscreen" \
@@ -32,10 +36,14 @@ if command -v shellcheck >/dev/null 2>&1; then
         "$repo_dir/scripts/install-niri-source.sh"
         "$repo_dir/scripts/install-xwayland-satellite.sh"
         "$repo_dir/home/.local/bin/niri-layout"
+        "$repo_dir/home/.local/bin/niri-quit"
+        "$repo_dir/home/.local/bin/power-menu"
         "$repo_dir/home/.local/bin/screen-brightness"
         "$repo_dir/home/.local/bin/niri-overview-wallpaper"
         "$repo_dir/home/.local/bin/niri-settings-menu"
         "$repo_dir/home/.local/bin/wallpaper-random"
+        "$repo_dir/home/.local/bin/screen-lock"
+        "$repo_dir/home/.local/bin/swaylock"
         "$repo_dir/home/.local/bin/ghostty"
     )
     existing_shellcheck_files=()
@@ -69,9 +77,13 @@ required_repo_files=(
     "$repo_dir/home/.local/bin/niri-fullscreen"
     "$repo_dir/home/.local/bin/niri-layout"
     "$repo_dir/home/.local/bin/niri-overview-wallpaper"
+    "$repo_dir/home/.local/bin/niri-quit"
     "$repo_dir/home/.local/bin/niri-settings-menu"
     "$repo_dir/home/.local/bin/niri-shortcuts-grid"
+    "$repo_dir/home/.local/bin/power-menu"
     "$repo_dir/home/.local/bin/screen-brightness"
+    "$repo_dir/home/.local/bin/screen-lock"
+    "$repo_dir/home/.local/bin/swaylock"
     "$repo_dir/home/.local/bin/wallpaper-random"
     "$repo_dir/home/.local/bin/window-opacity"
     "$repo_dir/home/.config/starship.toml"
@@ -91,6 +103,11 @@ done
 
 if grep -nE '^export (HTTP|HTTPS|ALL|http|https|all)_PROXY=' "$repo_dir/home/.bashrc"; then
     printf 'Machine-local proxy exports should not be tracked in home/.bashrc.\n' >&2
+    exit 1
+fi
+
+if grep -nE '^GTK_IM_MODULE=' "$repo_dir/home/.config/environment.d"/*.conf 2>/dev/null; then
+    printf 'GTK_IM_MODULE should not be set in Wayland environment.d config; let fcitx5 use its Wayland frontend.\n' >&2
     exit 1
 fi
 

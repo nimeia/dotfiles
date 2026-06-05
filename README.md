@@ -10,7 +10,8 @@
 - fuzzel、mako、ghostty、NvChad 配置
 - tmux + Oh my tmux 本地覆盖配置
 - Emacs pgtk + Doom Emacs 私人配置
-- 自定义脚本：`niri-shortcuts-grid`、`niri-settings-menu`、`wallpaper-random`、`niri-overview-wallpaper`
+- 自定义脚本：`niri-layout`、`niri-fullscreen`、`niri-shortcuts-grid`、`niri-settings-menu`、
+  `power-menu`、`screen-lock`、`niri-quit`、`wallpaper-random`、`niri-overview-wallpaper`
 - niri overview 专用背景图
 
 ## 目录
@@ -193,7 +194,7 @@ git status
 ## 不纳入仓库的内容
 
 - `*.backup-*` 历史备份
-- fcitx5 缓存布局
+- fcitx5 缓存布局；Wayland 会话下不跟踪 `GTK_IM_MODULE`，避免和 fcitx5 的 Wayland frontend 冲突
 - nvim 内部 `.git`
 - Warp 登录状态和本地数据库
 - 浏览器、VS Code、Zed 等应用缓存

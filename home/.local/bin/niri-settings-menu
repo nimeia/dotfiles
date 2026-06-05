@@ -32,7 +32,7 @@ case "$selection" in
         fcitx5-configtool >/dev/null 2>&1 &
         ;;
     'Open power menu')
-        wlogout --buttons-per-row 5 --column-spacing 12 --row-spacing 12 --margin 275
+        power-menu
         ;;
     '')
         exit 0

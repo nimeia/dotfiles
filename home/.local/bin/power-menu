@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+buttons_per_row="${POWER_MENU_BUTTONS_PER_ROW:-5}"
+column_spacing="${POWER_MENU_COLUMN_SPACING:-12}"
+row_spacing="${POWER_MENU_ROW_SPACING:-12}"
+target_width="${POWER_MENU_TARGET_WIDTH:-920}"
+target_height="${POWER_MENU_TARGET_HEIGHT:-260}"
+min_margin="${POWER_MENU_MIN_MARGIN:-32}"
+width=1920
+height=1080
+
+margin_for() {
+    local size=$1
+    local target=$2
+    local margin
+
+    margin=$(((size - target) / 2))
+    if [ "$margin" -lt "$min_margin" ]; then
+        margin="$min_margin"
+    fi
+    printf '%s\n' "$margin"
+}
+
+if command -v niri >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 && [ -n "${NIRI_SOCKET:-}" ]; then
+    output_json="$(niri msg -j focused-output 2>/dev/null || true)"
+    output_width="$(printf '%s\n' "$output_json" | jq -r '.logical.width // empty' 2>/dev/null || true)"
+    output_height="$(printf '%s\n' "$output_json" | jq -r '.logical.height // empty' 2>/dev/null || true)"
+    if [ -n "$output_width" ] && [ -n "$output_height" ]; then
+        width="${output_width%.*}"
+        height="${output_height%.*}"
+    fi
+fi
+
+margin_left="$(margin_for "$width" "$target_width")"
+margin_right="$margin_left"
+margin_top="$(margin_for "$height" "$target_height")"
+margin_bottom="$margin_top"
+
+if [ "${POWER_MENU_DRY_RUN:-0}" = 1 ]; then
+    printf 'width=%s height=%s left=%s right=%s top=%s bottom=%s\n' \
+        "$width" "$height" "$margin_left" "$margin_right" "$margin_top" "$margin_bottom"
+    exit 0
+fi
+
+exec wlogout \
+    --buttons-per-row "$buttons_per_row" \
+    --column-spacing "$column_spacing" \
+    --row-spacing "$row_spacing" \
+    --margin-left "$margin_left" \
+    --margin-right "$margin_right" \
+    --margin-top "$margin_top" \
+    --margin-bottom "$margin_bottom" \
+    "$@"

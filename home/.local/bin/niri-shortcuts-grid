@@ -13,6 +13,8 @@ from typing import Callable
 
 APP_ID = "dev.sakura.NiriShortcuts"
 TITLE = "Important Hotkeys"
+HOME = os.path.expanduser("~")
+LOCAL_BIN = os.path.join(HOME, ".local", "bin")
 
 
 @dataclass(frozen=True)
@@ -30,16 +32,16 @@ GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
     (
         "启动与系统",
         (
-            Hotkey("Mod Shift /", "打开本提示", argv=("/home/sakura/.local/bin/niri-shortcuts-grid",)),
+            Hotkey("Mod Shift /", "打开本提示", argv=(os.path.join(LOCAL_BIN, "niri-shortcuts-grid"),)),
             Hotkey("Mod Enter / T", "打开终端", argv=("ghostty",)),
             Hotkey("Mod S / R", "搜索或运行应用", argv=("fuzzel",)),
-            Hotkey("Mod E", "打开文件管理器", argv=("thunar", "/home/sakura")),
-            Hotkey("Mod Alt E", "打开终端文件管理器", argv=("ghostty", "-e", "/home/sakura/.local/bin/yazi", "/home/sakura")),
-            Hotkey("Mod I", "设置菜单", argv=("/home/sakura/.local/bin/niri-settings-menu",)),
+            Hotkey("Mod E", "打开文件管理器", argv=("thunar", HOME)),
+            Hotkey("Mod Alt E", "打开终端文件管理器", argv=("ghostty", "-e", os.path.join(LOCAL_BIN, "yazi"), HOME)),
+            Hotkey("Mod I", "设置菜单", argv=(os.path.join(LOCAL_BIN, "niri-settings-menu"),)),
             Hotkey("Mod P", "显示设置", argv=("wdisplays",)),
-            Hotkey("Mod L", "锁屏", argv=("swaylock",)),
+            Hotkey("Mod L", "锁屏", argv=(os.path.join(LOCAL_BIN, "screen-lock"),)),
             Hotkey("Mod B", "显示或隐藏 Waybar", argv=("killall", "-SIGUSR1", "waybar")),
-            Hotkey("Mod X / Shift Q", "电源菜单", argv=("wlogout", "--buttons-per-row", "5", "--column-spacing", "12", "--row-spacing", "12", "--margin", "275")),
+            Hotkey("Mod X / Shift Q", "电源菜单", argv=("power-menu",)),
         ),
     ),
     (
