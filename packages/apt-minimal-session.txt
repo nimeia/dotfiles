@@ -1,0 +1,16 @@
+# Display manager for minimal or dedicated niri installs.
+greetd
+tuigreet
+
+# Audio services usually already exist on Ubuntu Desktop.
+pipewire
+pipewire-pulse
+wireplumber
+libspa-0.2-bluetooth
+
+# Bluetooth services usually already exist on Ubuntu Desktop.
+bluez
+bluetooth
+blueman
+bluez-obexd
+rfkill

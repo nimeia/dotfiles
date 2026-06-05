@@ -11,6 +11,8 @@ skip_niri_source=0
 skip_system=0
 skip_check=0
 with_doom=1
+profile="${DOTFILES_PROFILE:-auto}"
+detected_base="unknown"
 niri_ref="${NIRI_REF:-}"
 sudo_ready=0
 ran_steps=0
@@ -24,13 +26,15 @@ current Ubuntu environment and installed tools, then only runs missing phases.
 
 Options:
   --dry-run           Print the detected plan without changing the system.
+  --profile NAME      Install profile: auto, desktop, or minimal.
+                      auto uses desktop when ubuntu-desktop is installed.
   --with-doom         Run Doom Emacs install after the desktop is configured.
   --skip-doom         Do not install or sync Doom Emacs packages/env.
   --niri-ref REF      Build a specific niri ref, such as v26.04 or a commit.
   --skip-packages     Do not install apt packages or base tool shims.
   --skip-external     Do not install Chrome/Yazi/swww/fonts/wallpapers.
   --skip-niri-source  Do not build or install niri from source.
-  --skip-system       Do not install greetd/niri system templates.
+  --skip-system       Do not install profile-specific system templates.
   --skip-check        Do not run ./check.sh at the end.
   -h, --help          Show this help.
 EOF
@@ -40,6 +44,14 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --dry-run)
             dry_run=1
+            ;;
+        --profile)
+            [ "$#" -ge 2 ] || {
+                printf 'missing value for --profile\n' >&2
+                exit 2
+            }
+            profile="$2"
+            shift
             ;;
         --with-doom)
             with_doom=1
@@ -98,6 +110,18 @@ die() {
 
 have() {
     command -v "$1" >/dev/null 2>&1
+}
+
+validate_profile_arg() {
+    case "$profile" in
+        auto | desktop | minimal)
+            ;;
+        *)
+            printf 'unknown profile: %s\n' "$profile" >&2
+            printf 'expected: auto, desktop, or minimal\n' >&2
+            exit 2
+            ;;
+    esac
 }
 
 print_command() {
@@ -165,6 +189,36 @@ collect_missing_packages() {
     done < <(grep -vE '^[[:space:]]*(#|$)' "$file")
 }
 
+package_files() {
+    local kind="$1"
+    local files=()
+    local file
+
+    case "$kind" in
+        apt)
+            files=("$repo_dir/packages/apt.txt")
+            if [ "$profile" = "minimal" ]; then
+                files+=("$repo_dir/packages/apt-minimal-session.txt")
+            fi
+            if [ "$with_doom" -eq 1 ]; then
+                files+=("$repo_dir/packages/apt-doom.txt")
+            fi
+            ;;
+        apt-no-recommends)
+            files=("$repo_dir/packages/apt-no-recommends.txt")
+            ;;
+        *)
+            printf 'unknown package list kind: %s\n' "$kind" >&2
+            return 2
+            ;;
+    esac
+
+    for file in "${files[@]}"; do
+        [ -f "$file" ] || continue
+        printf '%s\n' "$file"
+    done
+}
+
 npm_globals_ready() {
     local package
 
@@ -229,7 +283,6 @@ user_config_ready() {
         .zshrc
         .gitconfig
         .config/doom
-        .config/environment.d
         .config/fcitx5
         .config/fuzzel
         .config/ghostty
@@ -240,10 +293,17 @@ user_config_ready() {
         .config/waybar
         .config/wlogout
         .config/xdg-desktop-portal
-        .local/share/applications/google-chrome.desktop
         .local/share/wallpapers/default.png
         .local/share/wallpapers/niri-overview.png
     )
+
+    if [ "$profile" = "minimal" ]; then
+        tracked_items+=(
+            .config/environment.d
+            .config/mimeapps.list
+            .local/share/applications/google-chrome.desktop
+        )
+    fi
 
     for rel in "${tracked_items[@]}"; do
         src="$repo_dir/home/$rel"
@@ -259,14 +319,38 @@ system_templates_ready() {
     [ -x /usr/local/bin/niri ] || return 1
     [ -x /usr/local/bin/niri-session ] || return 1
     [ -f /usr/share/wayland-sessions/niri.desktop ] || return 1
-    [ -f /etc/greetd/config.toml ] || return 1
 
     cmp -s "$repo_dir/system/usr/local/bin/niri-session" /usr/local/bin/niri-session || return 1
     cmp -s "$repo_dir/system/usr/share/wayland-sessions/niri.desktop" /usr/share/wayland-sessions/niri.desktop || return 1
+
+    if [ "$profile" = "desktop" ]; then
+        return 0
+    fi
+
+    [ -f /etc/greetd/config.toml ] || return 1
     cmp -s "$repo_dir/system/etc/greetd/config.toml" /etc/greetd/config.toml || return 1
 
     [ -r /etc/X11/default-display-manager ] || return 1
     grep -qx '/usr/sbin/greetd' /etc/X11/default-display-manager
+}
+
+resolve_profile() {
+    if [ "$profile" = "auto" ]; then
+        if [ "$detected_base" = "desktop" ]; then
+            profile="desktop"
+        else
+            profile="minimal"
+        fi
+    fi
+
+    log "install profile: $profile"
+    if [ "$profile" = "desktop" ]; then
+        printf '  system: keep the existing display manager and only add the niri session entry\n'
+        printf '  user: skip global environment.d, mimeapps, and Chrome default-browser overrides\n'
+    else
+        printf '  system: install greetd templates and switch the default display manager to greetd\n'
+        printf '  user: link the full user configuration set\n'
+    fi
 }
 
 print_environment_summary() {
@@ -282,7 +366,7 @@ print_environment_summary() {
     base="unknown"
     session="${XDG_CURRENT_DESKTOP:-unknown}/${XDG_SESSION_TYPE:-unknown}"
 
-    if package_installed ubuntu-desktop || package_installed ubuntu-desktop-minimal; then
+    if package_installed ubuntu-desktop || package_installed ubuntu-desktop-minimal || package_installed gdm3 || package_installed gdm; then
         base="desktop"
     elif package_installed ubuntu-server; then
         base="server"
@@ -293,6 +377,7 @@ print_environment_summary() {
     printf '  arch: %s\n' "$arch"
     printf '  base: %s\n' "$base"
     printf '  session: %s\n' "$session"
+    detected_base="$base"
 
     if [ "$os_id" != "ubuntu" ]; then
         warn "this bootstrap is tuned for Ubuntu; continuing because most checks are tool-based"
@@ -309,22 +394,36 @@ fi
 have apt || die "apt is required; this bootstrap currently targets Ubuntu/Debian-style systems"
 have dpkg-query || die "dpkg-query is required to detect installed packages"
 
+validate_profile_arg
 print_environment_summary
+resolve_profile
 
 missing_packages=()
-collect_missing_packages "$repo_dir/packages/apt.txt"
-collect_missing_packages "$repo_dir/packages/apt-no-recommends.txt"
+while IFS= read -r package_file; do
+    collect_missing_packages "$package_file"
+done < <(package_files apt)
+while IFS= read -r package_file; do
+    collect_missing_packages "$package_file"
+done < <(package_files apt-no-recommends)
 
 need_packages=0
-if [ "${#missing_packages[@]}" -gt 0 ] || ! have rust-analyzer || ! npm_globals_ready || ! video_group_ready; then
+if [ "${#missing_packages[@]}" -gt 0 ] || ! have rust-analyzer || ! video_group_ready; then
     need_packages=1
+fi
+if [ "$with_doom" -eq 1 ] && ! npm_globals_ready; then
+    need_packages=1
+fi
+
+package_args=(--profile "$profile")
+if [ "$with_doom" -eq 0 ]; then
+    package_args+=(--skip-doom-packages)
 fi
 
 if [ "$skip_packages" -eq 0 ] && [ "$need_packages" -eq 1 ]; then
     if [ "${#missing_packages[@]}" -gt 0 ]; then
         printf '  missing apt packages: %s\n' "${missing_packages[*]}"
     fi
-    run_step "install base packages and tool shims" 1 "$repo_dir/install.sh" --packages
+    run_step "install base packages and tool shims" 1 "$repo_dir/install.sh" "${package_args[@]}" --packages
 elif [ "$skip_packages" -eq 1 ]; then
     warn "skipping package installation by request"
 else
@@ -336,7 +435,7 @@ if [ "$skip_packages" -eq 0 ] && [ "$need_packages" -eq 0 ] && ! have xwayland-s
 fi
 
 if [ "$skip_external" -eq 0 ] && ! external_tools_ready; then
-    run_step "install external desktop tools" 1 "$repo_dir/install.sh" --external
+    run_step "install external desktop tools" 1 "$repo_dir/install.sh" --profile "$profile" --external
 elif [ "$skip_external" -eq 1 ]; then
     warn "skipping external tools by request"
 else
@@ -361,17 +460,21 @@ if [ "$skip_system" -eq 0 ]; then
     if system_templates_ready && user_config_ready; then
         log "user config and system templates already look installed"
     elif [ -x /usr/local/bin/niri ] || [ "$dry_run" -eq 1 ]; then
-        run_step "install user config and greetd/niri system templates" 1 "$repo_dir/install.sh" --system
+        if [ "$profile" = "desktop" ]; then
+            run_step "install user config and niri session entry" 1 "$repo_dir/install.sh" --profile "$profile" --system
+        else
+            run_step "install user config and greetd/niri system templates" 1 "$repo_dir/install.sh" --profile "$profile" --system
+        fi
     else
         warn "niri is not installed; skipping system templates to avoid a broken login session"
         if ! user_config_ready; then
-            run_step "install user config only" 0 "$repo_dir/install.sh"
+            run_step "install user config only" 0 "$repo_dir/install.sh" --profile "$profile"
         fi
     fi
 else
     warn "skipping system templates by request"
     if ! user_config_ready; then
-        run_step "install user config only" 0 "$repo_dir/install.sh"
+        run_step "install user config only" 0 "$repo_dir/install.sh" --profile "$profile"
     fi
 fi
 
@@ -379,10 +482,10 @@ if [ "$with_doom" -eq 1 ]; then
     if doom_ready; then
         log "Doom Emacs packages and env already look installed"
     else
-        run_step "install Doom Emacs packages and env" 0 "$repo_dir/install.sh" --doom
+        run_step "install Doom Emacs packages and env" 0 "$repo_dir/install.sh" --profile "$profile" --doom
     fi
 else
-    warn "skipping Doom Emacs package/env sync by request; run ./install.sh --doom before starting Emacs"
+    warn "skipping Doom Emacs package/env sync by request; run ./install.sh --profile $profile --doom before starting Emacs"
 fi
 
 if [ "$skip_check" -eq 0 ]; then
@@ -394,4 +497,8 @@ if [ "$ran_steps" -eq 0 ]; then
 fi
 
 log "bootstrap complete"
-printf 'Restart the session after first install so greetd, niri, portals, groups, and XWayland integration reload cleanly.\n'
+if [ "$profile" = "desktop" ]; then
+    printf 'Log out after first install and choose the Niri session from the existing display manager.\n'
+else
+    printf 'Restart the session after first install so greetd, niri, portals, groups, and XWayland integration reload cleanly.\n'
+fi

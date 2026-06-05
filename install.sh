@@ -4,28 +4,60 @@ set -euo pipefail
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 backup_dir="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 export PATH="$HOME/.local/bin:$PATH"
+profile="${DOTFILES_PROFILE:-minimal}"
+install_doom_packages="${DOTFILES_INSTALL_DOOM_PACKAGES:-1}"
 
 # shellcheck source=scripts/lib/apt.sh
 . "$repo_dir/scripts/lib/apt.sh"
 
 usage() {
     cat <<'EOF'
-Usage: ./install.sh [--packages|--external|--wallpapers|--nvim|--xwayland-satellite|--niri-source|--system|--doom|--all]
+Usage: ./install.sh [--profile desktop|minimal] [--skip-doom-packages] [--packages|--external|--wallpapers|--nvim|--xwayland-satellite|--niri-source|--system|--system-niri-session|--system-greetd|--doom|--all]
 
 With no arguments, installs user dotfile symlinks and local helper scripts.
 
 Options:
-  --packages     Install apt packages, npm globals, rust-analyzer, and shims.
+  --profile NAME  Install profile: desktop keeps GDM/GNOME defaults, minimal owns the login stack.
+  --skip-doom-packages
+                 Do not install Emacs/Doom apt packages or npm globals during --packages.
+  --packages     Install apt packages, optional npm globals, rust-analyzer, and shims.
   --external     Install external tools: Chrome, Yazi, swww, fonts, wallpapers.
   --wallpapers   Install or update the Catppuccin wallpaper collection only.
   --nvim         Install Neovim config and lazy.nvim bootstrap only.
   --xwayland-satellite
                  Build/install xwayland-satellite for niri X11 app support.
   --niri-source  Build/install niri from source; extra args are forwarded.
-  --system       Install user files and system greetd/niri session templates.
+  --system       Install user files and profile-specific system templates.
+  --system-niri-session
+                 Install the niri session entry without changing the display manager.
+  --system-greetd
+                 Install greetd templates and switch the default display manager to greetd.
   --doom         Install user files and Doom Emacs packages/env.
-  --all          Install packages, external tools, user files, system files, Doom.
+  --all          Install packages, external tools, user files, profile system files, Doom.
 EOF
+}
+
+validate_profile() {
+    case "$profile" in
+        desktop | minimal)
+            ;;
+        *)
+            printf 'unknown profile: %s\n' "$profile" >&2
+            printf 'expected: desktop or minimal\n' >&2
+            exit 2
+            ;;
+    esac
+}
+
+validate_doom_package_flag() {
+    case "$install_doom_packages" in
+        0 | 1)
+            ;;
+        *)
+            printf 'DOTFILES_INSTALL_DOOM_PACKAGES must be 0 or 1, got: %s\n' "$install_doom_packages" >&2
+            exit 2
+            ;;
+    esac
 }
 
 retry_cmd() {
@@ -94,28 +126,35 @@ link_item() {
 
 install_user() {
     local item
+    local items=(
+        .bashrc
+        .zshrc
+        .gitconfig
+        .config/doom
+        .config/fcitx5
+        .config/fuzzel
+        .config/ghostty
+        .config/mako
+        .config/niri
+        .config/nvim
+        .config/starship.toml
+        .config/swaylock
+        .config/waybar
+        .config/wlogout
+        .config/xdg-desktop-portal
+        .local/share/wallpapers/default.png
+        .local/share/wallpapers/niri-overview.png
+    )
 
-    for item in \
-        .bashrc \
-        .zshrc \
-        .gitconfig \
-        .config/doom \
-        .config/environment.d \
-        .config/fcitx5 \
-        .config/fuzzel \
-        .config/ghostty \
-        .config/mako \
-        .config/mimeapps.list \
-        .config/niri \
-        .config/nvim \
-        .config/starship.toml \
-        .config/swaylock \
-        .config/waybar \
-        .config/wlogout \
-        .config/xdg-desktop-portal \
-        .local/share/applications/google-chrome.desktop \
-        .local/share/wallpapers/default.png \
-        .local/share/wallpapers/niri-overview.png; do
+    if [ "$profile" = "minimal" ]; then
+        items+=(
+            .config/environment.d
+            .config/mimeapps.list
+            .local/share/applications/google-chrome.desktop
+        )
+    fi
+
+    for item in "${items[@]}"; do
         link_item "$item"
     done
 
@@ -374,35 +413,84 @@ install_python_tool_shims() {
     fi
 }
 
+package_files() {
+    local kind="$1"
+    local files=()
+    local file
+
+    case "$kind" in
+        apt)
+            files=(
+                "$repo_dir/packages/apt.txt"
+            )
+            if [ "$profile" = "minimal" ]; then
+                files+=("$repo_dir/packages/apt-minimal-session.txt")
+            fi
+            if [ "$install_doom_packages" -eq 1 ]; then
+                files+=("$repo_dir/packages/apt-doom.txt")
+            fi
+            ;;
+        apt-no-recommends)
+            files=(
+                "$repo_dir/packages/apt-no-recommends.txt"
+            )
+            ;;
+        *)
+            printf 'unknown package list kind: %s\n' "$kind" >&2
+            return 2
+            ;;
+    esac
+
+    for file in "${files[@]}"; do
+        [ -f "$file" ] || continue
+        printf '%s\n' "$file"
+    done
+}
+
+package_list() {
+    local kind="$1"
+    local file
+
+    while IFS= read -r file; do
+        grep -vE '^\s*(#|$)' "$file"
+    done < <(package_files "$kind")
+}
+
 install_packages() {
     local packages=()
 
     apt_update
-    mapfile -t packages < <(grep -vE '^\s*(#|$)' "$repo_dir/packages/apt.txt")
+    mapfile -t packages < <(package_list apt)
     if [ "${#packages[@]}" -gt 0 ]; then
         apt_install "${packages[@]}"
     fi
 
-    if [ -f "$repo_dir/packages/apt-no-recommends.txt" ]; then
+    if package_files apt-no-recommends >/dev/null; then
         packages=()
-        mapfile -t packages < <(grep -vE '^\s*(#|$)' "$repo_dir/packages/apt-no-recommends.txt")
+        mapfile -t packages < <(package_list apt-no-recommends)
         if [ "${#packages[@]}" -gt 0 ]; then
             apt_install_no_recommends "${packages[@]}"
         fi
     fi
     install_xwayland_satellite --skip-deps
     ensure_backlight_access
-    install_npm_globals
+    if [ "$install_doom_packages" -eq 1 ]; then
+        install_npm_globals
+    fi
     install_neovim_lazy
     install_emacs_shims
     install_rust_analyzer
     install_python_tool_shims
 }
 
-install_system() {
-    sudo install -D -m 0644 "$repo_dir/system/etc/greetd/config.toml" /etc/greetd/config.toml
+install_niri_session_entry() {
     sudo install -D -m 0644 "$repo_dir/system/usr/share/wayland-sessions/niri.desktop" /usr/share/wayland-sessions/niri.desktop
     sudo install -D -m 0755 "$repo_dir/system/usr/local/bin/niri-session" /usr/local/bin/niri-session
+}
+
+install_greetd_system() {
+    sudo install -D -m 0644 "$repo_dir/system/etc/greetd/config.toml" /etc/greetd/config.toml
+    install_niri_session_entry
 
     if [ -x /usr/sbin/greetd ]; then
         printf '/usr/sbin/greetd\n' | sudo tee /etc/X11/default-display-manager >/dev/null
@@ -414,17 +502,52 @@ install_system() {
     fi
 }
 
+install_system() {
+    if [ "$profile" = "desktop" ]; then
+        install_niri_session_entry
+    else
+        install_greetd_system
+    fi
+}
+
 install_external() {
-    "$repo_dir/scripts/install-external.sh"
+    DOTFILES_PROFILE="$profile" "$repo_dir/scripts/install-external.sh"
 }
 
 install_wallpapers() {
-    "$repo_dir/scripts/install-external.sh" --wallpapers-only
+    DOTFILES_PROFILE="$profile" "$repo_dir/scripts/install-external.sh" --wallpapers-only
 }
 
 install_xwayland_satellite() {
     "$repo_dir/scripts/install-xwayland-satellite.sh" "$@"
 }
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --profile)
+            [ "$#" -ge 2 ] || {
+                printf 'missing value for --profile\n' >&2
+                exit 2
+            }
+            profile="$2"
+            shift 2
+            ;;
+        --skip-doom-packages)
+            install_doom_packages=0
+            shift
+            ;;
+        --with-doom-packages)
+            install_doom_packages=1
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+validate_profile
+validate_doom_package_flag
 
 case "${1:-}" in
     -h | --help)
@@ -456,6 +579,12 @@ case "${1:-}" in
     --system)
         install_user
         install_system
+        ;;
+    --system-niri-session)
+        install_niri_session_entry
+        ;;
+    --system-greetd)
+        install_greetd_system
         ;;
     --doom)
         install_doom_profile

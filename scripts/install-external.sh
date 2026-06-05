@@ -5,6 +5,8 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd -- "$script_dir/.." && pwd)"
 force=0
 wallpapers_only=0
+profile="${DOTFILES_PROFILE:-minimal}"
+set_default_browser="${DOTFILES_SET_DEFAULT_BROWSER:-}"
 export PATH="$HOME/.local/bin:$PATH"
 
 # shellcheck source=scripts/lib/apt.sh
@@ -12,7 +14,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 usage() {
     cat <<'EOF'
-Usage: scripts/install-external.sh [--force] [--wallpapers-only]
+Usage: scripts/install-external.sh [--force] [--wallpapers-only] [--set-default-browser|--no-default-browser]
 
 Installs external or non-apt items used by this dotfiles setup:
   - Google Chrome from the official .deb
@@ -28,6 +30,18 @@ niri is intentionally check-only here because this setup expects it at
 EOF
 }
 
+validate_profile() {
+    case "$profile" in
+        desktop | minimal)
+            ;;
+        *)
+            printf 'unknown profile: %s\n' "$profile" >&2
+            printf 'expected: desktop or minimal\n' >&2
+            exit 2
+            ;;
+    esac
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --force)
@@ -35,6 +49,12 @@ while [ "$#" -gt 0 ]; do
             ;;
         --wallpapers-only)
             wallpapers_only=1
+            ;;
+        --set-default-browser)
+            set_default_browser=1
+            ;;
+        --no-default-browser)
+            set_default_browser=0
             ;;
         -h | --help)
             usage
@@ -48,6 +68,23 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
+
+validate_profile
+if [ -z "$set_default_browser" ]; then
+    if [ "$profile" = "desktop" ]; then
+        set_default_browser=0
+    else
+        set_default_browser=1
+    fi
+fi
+case "$set_default_browser" in
+    0 | 1)
+        ;;
+    *)
+        printf 'DOTFILES_SET_DEFAULT_BROWSER must be 0 or 1, got: %s\n' "$set_default_browser" >&2
+        exit 2
+        ;;
+esac
 
 log() {
     printf '==> %s\n' "$*"
@@ -137,6 +174,11 @@ download() {
 }
 
 set_chrome_as_default() {
+    if [ "$set_default_browser" -ne 1 ]; then
+        log "skip changing the default browser for profile: $profile"
+        return
+    fi
+
     mkdir -p -- "$HOME/.config"
 
     if have xdg-mime; then
@@ -301,7 +343,7 @@ check_niri() {
         return
     fi
 
-    warn "niri is not installed. Build/install niri first so /usr/local/bin/niri exists, then run ./install.sh --system."
+    warn "niri is not installed. Build/install niri first so /usr/local/bin/niri exists, then run ./install.sh --profile $profile --system."
 }
 
 check_result() {
