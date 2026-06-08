@@ -14,3 +14,11 @@ bluetooth
 blueman
 bluez-obexd
 rfkill
+
+# File manager stack for minimal installs. Ubuntu Desktop keeps its default file manager.
+thunar
+thunar-archive-plugin
+thunar-volman
+tumbler
+gvfs-backends
+xarchiver

@@ -454,7 +454,7 @@ binds {
     Mod+Return hotkey-overlay-title="打开终端：Ghostty" { spawn "ghostty"; }
     Mod+S hotkey-overlay-title="搜索/启动应用" { spawn "fuzzel"; }
     Mod+R hotkey-overlay-title="运行命令/启动应用" { spawn "fuzzel"; }
-    Mod+E hotkey-overlay-title="打开文件管理器：Thunar" { spawn-sh "exec thunar \"$HOME\""; }
+    Mod+E hotkey-overlay-title="打开默认文件管理器" { spawn "dotfiles-file-manager"; }
     Mod+Alt+E hotkey-overlay-title="打开终端文件管理器：Yazi" { spawn-sh "exec ghostty -e \"$HOME/.local/bin/yazi\" \"$HOME\""; }
     Mod+I hotkey-overlay-title="打开设置菜单" { spawn-sh "exec \"$HOME/.local/bin/niri-settings-menu\""; }
     Mod+P hotkey-overlay-title="打开显示设置" { spawn "wdisplays"; }

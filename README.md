@@ -7,7 +7,7 @@
 - Waybar/Owlphin 主题和电源菜单入口
 - wlogout 电源菜单主题
 - fcitx5 拼音 + 五笔输入法配置
-- fuzzel、mako、ghostty、NvChad 配置
+- fuzzel、mako、ghostty、NvChad、默认终端配置
 - tmux + Oh my tmux 本地覆盖配置
 - Emacs pgtk + Doom Emacs 私人配置
 - 自定义脚本：`niri-layout`、`niri-fullscreen`、`niri-shortcuts-grid`、`niri-settings-menu`、
@@ -43,9 +43,9 @@ cd ~/dotfiles
 安装脚本支持两个 profile：
 
 - `desktop`：用于 Ubuntu Desktop 或已有 GNOME/GDM 的系统。保留现有显示管理器，只安装 niri
-  会话入口；用户配置不会接管全局 `environment.d`、`mimeapps.list` 和 Chrome 默认浏览器。
+  会话入口；用户配置不会接管全局 `environment.d`、`mimeapps.list`、默认文件管理器和 Chrome 默认浏览器。
 - `minimal`：用于 Server、最小系统或专用 niri 桌面。会安装 greetd/tuigreet，并把默认显示管理器
-  切到 greetd。
+  切到 greetd，文件管理器默认使用 Thunar。
 
 `bootstrap.sh` 默认使用 `--profile auto`：检测到 `ubuntu-desktop`、`ubuntu-desktop-minimal` 或已有
 GDM 时走 `desktop`，否则走 `minimal`。也可以显式指定：
@@ -125,16 +125,26 @@ swww/swww-daemon、Nerd Font Symbols、轻量壁纸集合，以及 apt 中可用
 ./install.sh --profile desktop --system
 ```
 
-`--system` 会先执行 profile 对应的用户配置安装，再写入系统级模板。`desktop` profile 只写入：
+`--system` 会先链接 profile 对应的用户配置，再写入系统级模板；它不会拉取 Doom/Neovim 等联网工具。
+`desktop` profile 只写入：
 
 - `/usr/share/wayland-sessions/niri.desktop`
 - `/usr/local/bin/niri-session`
+- `/var/lib/AccountsService/users/$USER` 中的 `Session=niri`
 
 `minimal` profile 会额外写入 `/etc/greetd/config.toml`，把默认显示管理器设回 `greetd`，并禁用
 `gdm/gdm3`。这一步应放在 niri 已经安装之后，否则重启进入 niri 会话时可能找不到
 `/usr/local/bin/niri`。
 
-5. 安装 Doom Emacs 配置和包：
+5. 安装 Neovim 配置和插件：
+
+```bash
+./install.sh --profile desktop --nvim
+```
+
+这一步会链接 Neovim 配置、安装 `lazy.nvim`，并按 `lazy-lock.json` 恢复插件。
+
+6. 安装 Doom Emacs 配置和包：
 
 ```bash
 ./install.sh --profile desktop --doom
@@ -143,7 +153,8 @@ swww/swww-daemon、Nerd Font Symbols、轻量壁纸集合，以及 apt 中可用
 这一步依赖 `--packages` 里的 Emacs、git、Python/Node 工具。它会再次确保用户配置已链接，然后
 运行 Doom 的安装和环境同步。
 
-执行完后重启，选择 niri 会话登录。
+执行完后注销再登录。`desktop` profile 会把当前用户的 GDM 默认会话设为 niri；如果 GDM 登录界面
+显示会话选择入口，也可以手动切回 Ubuntu/GNOME。
 
 ### 单独维护命令
 

@@ -14,7 +14,7 @@ usage() {
     cat <<'EOF'
 Usage: ./install.sh [--profile desktop|minimal] [--skip-doom-packages] [--packages|--external|--wallpapers|--nvim|--xwayland-satellite|--niri-source|--system|--system-niri-session|--system-greetd|--doom|--all]
 
-With no arguments, installs user dotfile symlinks and local helper scripts.
+With no arguments, installs user dotfile symlinks, local helper scripts, and tool bootstraps.
 
 Options:
   --profile NAME  Install profile: desktop keeps GDM/GNOME defaults, minimal owns the login stack.
@@ -27,7 +27,7 @@ Options:
   --xwayland-satellite
                  Build/install xwayland-satellite for niri X11 app support.
   --niri-source  Build/install niri from source; extra args are forwarded.
-  --system       Install user files and profile-specific system templates.
+  --system       Install user symlinks and profile-specific system templates.
   --system-niri-session
                  Install the niri session entry without changing the display manager.
   --system-greetd
@@ -104,13 +104,21 @@ link_item() {
     local rel="$1"
     local src="$repo_dir/home/$rel"
     local dst="$HOME/$rel"
+    local resolved_src
+    local resolved_dst
 
     if [ ! -e "$src" ] && [ ! -L "$src" ]; then
         printf 'skip missing source: %s\n' "$src" >&2
         return
     fi
 
-    mkdir -p -- "$(dirname -- "$dst")"
+    ensure_link_parent_dir "$rel"
+
+    resolved_src="$(readlink -f -- "$src" 2>/dev/null || true)"
+    resolved_dst="$(readlink -f -- "$dst" 2>/dev/null || true)"
+    if [ -n "$resolved_src" ] && [ "$resolved_src" = "$resolved_dst" ]; then
+        return
+    fi
 
     if [ -L "$dst" ] && [ "$(readlink -- "$dst")" = "$src" ]; then
         return
@@ -124,7 +132,33 @@ link_item() {
     ln -s -- "$src" "$dst"
 }
 
-install_user() {
+ensure_link_parent_dir() {
+    local rel="$1"
+    local parent
+    local target
+    local repo_home
+
+    parent="$HOME/$(dirname -- "$rel")"
+    if [ "$parent" = "$HOME/." ]; then
+        parent="$HOME"
+    fi
+
+    if [ -L "$parent" ]; then
+        target="$(readlink -f -- "$parent" 2>/dev/null || true)"
+        repo_home="$(readlink -f -- "$repo_dir/home" 2>/dev/null || true)"
+        if [ -n "$target" ] && [ -n "$repo_home" ]; then
+            case "$target" in
+                "$repo_home" | "$repo_home"/*)
+                    rm -- "$parent"
+                    ;;
+            esac
+        fi
+    fi
+
+    mkdir -p -- "$parent"
+}
+
+install_user_files() {
     local item
     local items=(
         .bashrc
@@ -135,13 +169,17 @@ install_user() {
         .config/fuzzel
         .config/ghostty
         .config/mako
+        .config/niri-xdg-terminals.list
         .config/niri
         .config/nvim
         .config/starship.toml
         .config/swaylock
         .config/waybar
         .config/wlogout
+        .config/xdg-terminals.list
         .config/xdg-desktop-portal
+        .config/xfce4/helpers.rc
+        .local/share/applications/dotfiles-terminal.desktop
         .local/share/wallpapers/default.png
         .local/share/wallpapers/niri-overview.png
     )
@@ -158,18 +196,25 @@ install_user() {
         link_item "$item"
     done
 
+    for item in "$repo_dir"/home/.local/bin/*; do
+        [ -e "$item" ] || continue
+        link_item ".local/bin/$(basename -- "$item")"
+        chmod +x -- "$HOME/.local/bin/$(basename -- "$item")"
+    done
+}
+
+install_user_tools() {
     install_tmux
     install_doom
     install_neovim_lazy
     install_neovim_plugins
     install_emacs_shims
     install_python_tool_shims
+}
 
-    for item in "$repo_dir"/home/.local/bin/*; do
-        [ -e "$item" ] || continue
-        link_item ".local/bin/$(basename -- "$item")"
-        chmod +x -- "$HOME/.local/bin/$(basename -- "$item")"
-    done
+install_user() {
+    install_user_files
+    install_user_tools
 }
 
 install_tmux() {
@@ -642,6 +687,59 @@ install_niri_session_entry() {
     sudo install -D -m 0755 "$repo_dir/system/usr/local/bin/niri-session" /usr/local/bin/niri-session
 }
 
+set_gdm_default_session() {
+    [ "$profile" = "desktop" ] || return 0
+    [ -d /var/lib/AccountsService/users ] || return 0
+
+    sudo python3 - "$USER" <<'PY'
+from pathlib import Path
+import sys
+
+user = sys.argv[1]
+path = Path("/var/lib/AccountsService/users") / user
+text = path.read_text(encoding="utf-8") if path.exists() else ""
+lines = text.splitlines()
+
+out = []
+in_user = False
+seen_user = False
+wrote_session = False
+
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        if in_user and not wrote_session:
+            out.append("Session=niri")
+            wrote_session = True
+        in_user = stripped == "[User]"
+        seen_user = seen_user or in_user
+        out.append(line)
+        continue
+
+    if in_user and stripped.startswith("Session="):
+        if not wrote_session:
+            out.append("Session=niri")
+            wrote_session = True
+        continue
+
+    out.append(line)
+
+if not seen_user:
+    out.insert(0, "Session=niri")
+    out.insert(0, "[User]")
+elif in_user and not wrote_session:
+    out.append("Session=niri")
+
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text("\n".join(out) + "\n", encoding="utf-8")
+path.chmod(0o600)
+PY
+
+    if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl try-restart accounts-daemon.service >/dev/null 2>&1 || true
+    fi
+}
+
 install_greetd_system() {
     sudo install -D -m 0644 "$repo_dir/system/etc/greetd/config.toml" /etc/greetd/config.toml
     install_niri_session_entry
@@ -659,6 +757,7 @@ install_greetd_system() {
 install_system() {
     if [ "$profile" = "desktop" ]; then
         install_niri_session_entry
+        set_gdm_default_session
     else
         install_greetd_system
     fi
@@ -731,7 +830,7 @@ case "${1:-}" in
         exit 0
         ;;
     --system)
-        install_user
+        install_user_files
         install_system
         ;;
     --system-niri-session)

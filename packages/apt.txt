@@ -19,12 +19,6 @@ wlogout
 fuzzel
 mako-notifier
 swaylock
-thunar
-thunar-archive-plugin
-thunar-volman
-tumbler
-gvfs-backends
-xarchiver
 grim
 slurp
 wl-clipboard
@@ -48,6 +42,7 @@ fonts-noto-color-emoji
 
 # Terminals and shells
 tmux
+xdg-terminal-exec
 foot
 alacritty
 zsh

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Dotfiles Terminal
+TryExec=xdg-terminal-exec
+Exec=xdg-terminal-exec %F
+NoDisplay=true

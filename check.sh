@@ -14,6 +14,7 @@ bash -n \
     "$repo_dir/scripts/install-external.sh" \
     "$repo_dir/scripts/install-niri-source.sh" \
     "$repo_dir/scripts/install-xwayland-satellite.sh" \
+    "$repo_dir/home/.local/bin/dotfiles-file-manager" \
     "$repo_dir/home/.local/bin/niri-layout" \
     "$repo_dir/home/.local/bin/niri-quit" \
     "$repo_dir/home/.local/bin/power-menu" \
@@ -35,6 +36,7 @@ if command -v shellcheck >/dev/null 2>&1; then
         "$repo_dir/scripts/install-external.sh"
         "$repo_dir/scripts/install-niri-source.sh"
         "$repo_dir/scripts/install-xwayland-satellite.sh"
+        "$repo_dir/home/.local/bin/dotfiles-file-manager"
         "$repo_dir/home/.local/bin/niri-layout"
         "$repo_dir/home/.local/bin/niri-quit"
         "$repo_dir/home/.local/bin/power-menu"
@@ -66,7 +68,9 @@ if command -v fuzzel >/dev/null 2>&1; then
 fi
 
 if command -v desktop-file-validate >/dev/null 2>&1; then
-    desktop-file-validate "$repo_dir/home/.local/share/applications/google-chrome.desktop"
+    desktop-file-validate \
+        "$repo_dir/home/.local/share/applications/dotfiles-terminal.desktop" \
+        "$repo_dir/home/.local/share/applications/google-chrome.desktop"
 fi
 
 python3 -m json.tool "$repo_dir/home/.config/waybar/config-common" >/dev/null
@@ -74,6 +78,7 @@ python3 -m json.tool "$repo_dir/home/.config/waybar/config-common-tiling" >/dev/
 python3 -m json.tool "$repo_dir/home/.config/waybar/config-niri" >/dev/null
 
 required_repo_files=(
+    "$repo_dir/home/.local/bin/dotfiles-file-manager"
     "$repo_dir/home/.local/bin/niri-fullscreen"
     "$repo_dir/home/.local/bin/niri-layout"
     "$repo_dir/home/.local/bin/niri-overview-wallpaper"
@@ -90,6 +95,10 @@ required_repo_files=(
     "$repo_dir/home/.config/swaylock/config"
     "$repo_dir/home/.config/tmux/tmux.conf.local"
     "$repo_dir/home/.config/xdg-desktop-portal/niri-portals.conf"
+    "$repo_dir/home/.config/niri-xdg-terminals.list"
+    "$repo_dir/home/.config/xdg-terminals.list"
+    "$repo_dir/home/.config/xfce4/helpers.rc"
+    "$repo_dir/home/.local/share/applications/dotfiles-terminal.desktop"
     "$repo_dir/home/.local/share/applications/google-chrome.desktop"
     "$repo_dir/home/.local/share/wallpapers/default.png"
     "$repo_dir/home/.local/share/wallpapers/niri-overview.png"

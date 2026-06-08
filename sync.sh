@@ -152,13 +152,17 @@ copy_dir .config/mako
 copy_dir .config/nvim --exclude '.git/'
 copy_dir .config/xdg-desktop-portal
 copy_file_if_exists .config/mimeapps.list
+copy_file_if_exists .config/niri-xdg-terminals.list
 copy_file_if_exists .config/starship.toml
+copy_file_if_exists .config/xdg-terminals.list
+copy_file_if_exists .config/xfce4/helpers.rc
 
 if [ -f "$HOME/.config/tmux/tmux.conf.local" ]; then
     install -D -m 0644 "$HOME/.config/tmux/tmux.conf.local" "$repo_dir/home/.config/tmux/tmux.conf.local"
 fi
 
 copy_file_if_exists .local/share/applications/google-chrome.desktop
+copy_file_if_exists .local/share/applications/dotfiles-terminal.desktop
 normalize_google_chrome_desktop
 
 copy_file_if_exists .zshrc
@@ -167,6 +171,7 @@ copy_file_if_exists .gitconfig
 copy_bashrc
 
 mkdir -p -- "$repo_dir/home/.local/bin"
+copy_local_bin_if_exists dotfiles-file-manager
 copy_local_bin_if_exists ghostty
 copy_local_bin_if_exists niri-layout
 copy_local_bin_if_exists niri-quit

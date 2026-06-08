@@ -344,12 +344,17 @@ user_config_ready() {
         .config/fuzzel
         .config/ghostty
         .config/mako
+        .config/niri-xdg-terminals.list
         .config/niri
+        .config/nvim
         .config/starship.toml
         .config/swaylock
         .config/waybar
         .config/wlogout
+        .config/xdg-terminals.list
         .config/xdg-desktop-portal
+        .config/xfce4/helpers.rc
+        .local/share/applications/dotfiles-terminal.desktop
         .local/share/wallpapers/default.png
         .local/share/wallpapers/niri-overview.png
     )
@@ -369,8 +374,12 @@ user_config_ready() {
         [ -L "$dst" ] && [ "$(readlink -- "$dst")" = "$src" ] || return 1
     done
 
-    neovim_lazy_ready || return 1
-    neovim_plugins_ready || return 1
+    for src in "$repo_dir"/home/.local/bin/*; do
+        [ -e "$src" ] || continue
+        rel=".local/bin/$(basename -- "$src")"
+        dst="$HOME/$rel"
+        [ -L "$dst" ] && [ "$(readlink -- "$dst")" = "$src" ] || return 1
+    done
 }
 
 system_templates_ready() {
@@ -382,7 +391,8 @@ system_templates_ready() {
     cmp -s "$repo_dir/system/usr/share/wayland-sessions/niri.desktop" /usr/share/wayland-sessions/niri.desktop || return 1
 
     if [ "$profile" = "desktop" ]; then
-        return 0
+        gdm_default_session_ready
+        return
     fi
 
     [ -f /etc/greetd/config.toml ] || return 1
@@ -390,6 +400,18 @@ system_templates_ready() {
 
     [ -r /etc/X11/default-display-manager ] || return 1
     grep -qx '/usr/sbin/greetd' /etc/X11/default-display-manager
+}
+
+gdm_default_session_ready() {
+    local file="/var/lib/AccountsService/users/$USER"
+
+    if [ -r "$file" ]; then
+        grep -qx 'Session=niri' "$file"
+        return
+    fi
+
+    have sudo || return 1
+    sudo -n grep -qx 'Session=niri' "$file" 2>/dev/null
 }
 
 resolve_profile() {
@@ -404,6 +426,7 @@ resolve_profile() {
     log "install profile: $profile"
     if [ "$profile" = "desktop" ]; then
         printf '  system: keep the existing display manager and only add the niri session entry\n'
+        printf '  system: set the current user default GDM session to niri\n'
         printf '  user: skip global environment.d, mimeapps, and Chrome default-browser overrides\n'
     else
         printf '  system: install greetd templates and switch the default display manager to greetd\n'
@@ -534,6 +557,16 @@ else
     if ! user_config_ready; then
         run_step "install user config only" 0 "$repo_dir/install.sh" --profile "$profile"
     fi
+fi
+
+if have nvim; then
+    if neovim_plugins_ready; then
+        log "Neovim plugins already look installed"
+    else
+        run_step "install Neovim config and plugins" 0 "$repo_dir/install.sh" --profile "$profile" --nvim
+    fi
+else
+    warn "skipping Neovim plugin restore; nvim is not installed"
 fi
 
 if [ "$with_doom" -eq 1 ]; then

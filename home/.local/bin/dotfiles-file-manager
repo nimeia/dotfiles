@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target="${1:-$HOME}"
+
+if command -v xdg-open >/dev/null 2>&1; then
+    if xdg-open "$target" >/dev/null 2>&1; then
+        exit 0
+    fi
+fi
+
+for manager in nautilus thunar pcmanfm dolphin; do
+    if command -v "$manager" >/dev/null 2>&1; then
+        exec "$manager" "$target"
+    fi
+done
+
+printf 'No file manager found for %s\n' "$target" >&2
+exit 1
