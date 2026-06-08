@@ -84,6 +84,10 @@ log() {
     printf '==> %s\n' "$*"
 }
 
+warn() {
+    printf 'WARN: %s\n' "$*" >&2
+}
+
 die() {
     printf 'ERROR: %s\n' "$*" >&2
     exit 1
@@ -149,10 +153,21 @@ resolve_ref() {
     have curl || die "curl is required to resolve the latest xwayland-satellite release"
     have jq || die "jq is required to resolve the latest xwayland-satellite release"
 
-    xwayland_satellite_ref="$(
+    if xwayland_satellite_ref="$(
         curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 20 \
             "https://api.github.com/repos/Supreeeme/xwayland-satellite/releases/latest" |
             jq -r '.tag_name // empty'
+    )" && [ -n "$xwayland_satellite_ref" ]; then
+        printf '%s\n' "$xwayland_satellite_ref"
+        return
+    fi
+
+    warn "GitHub release API failed; falling back to git tag lookup"
+    xwayland_satellite_ref="$(
+        git_remote ls-remote --tags --refs "$xwayland_satellite_repo" 'v*' |
+            awk '{ sub("refs/tags/", "", $2); print $2 }' |
+            sort -V |
+            tail -n 1
     )"
 
     [ -n "$xwayland_satellite_ref" ] || die "could not resolve latest xwayland-satellite release tag"

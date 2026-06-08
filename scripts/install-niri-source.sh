@@ -182,7 +182,7 @@ resolve_ref() {
     have curl || die "curl is required to resolve the latest niri release"
     have jq || die "jq is required to resolve the latest niri release"
 
-    niri_ref="$(
+    if niri_ref="$(
         curl -fsSL \
             --retry 5 \
             --retry-delay 2 \
@@ -192,6 +192,17 @@ resolve_ref() {
             --speed-time "${DOTFILES_DOWNLOAD_SPEED_TIME:-60}" \
             "https://api.github.com/repos/niri-wm/niri/releases/latest" |
             jq -r '.tag_name // empty'
+    )" && [ -n "$niri_ref" ]; then
+        printf '%s\n' "$niri_ref"
+        return
+    fi
+
+    warn "GitHub release API failed; falling back to git tag lookup"
+    niri_ref="$(
+        git_remote ls-remote --tags --refs "$niri_repo" 'v*' |
+            awk '{ sub("refs/tags/", "", $2); print $2 }' |
+            sort -V |
+            tail -n 1
     )"
 
     [ -n "$niri_ref" ] || die "could not resolve latest niri release tag"
