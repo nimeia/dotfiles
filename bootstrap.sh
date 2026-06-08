@@ -297,12 +297,14 @@ doom_ready() {
     local doom_dir="$HOME/.config/doom"
     local doom_src="$repo_dir/home/.config/doom"
     local emacs_dir="$HOME/.config/emacs"
+    local legacy_emacs_dir="$HOME/.emacs.d"
     local profile="$emacs_dir/.local/cache/profiles.@.el"
     local stamp="$emacs_dir/.local/state/dotfiles-doom.sha256"
 
     [ -x "$emacs_dir/bin/doom" ] || return 1
     [ -f "$emacs_dir/.local/env" ] || return 1
     [ -f "$profile" ] || return 1
+    [ -L "$legacy_emacs_dir" ] && [ "$(readlink -f -- "$legacy_emacs_dir")" = "$(readlink -f -- "$emacs_dir")" ] || return 1
     [ -L "$doom_dir" ] && [ "$(readlink -- "$doom_dir")" = "$doom_src" ] || return 1
     [ -f "$stamp" ] || return 1
     [ "$(doom_config_fingerprint)" = "$(cat "$stamp")" ]

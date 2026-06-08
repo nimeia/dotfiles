@@ -238,6 +238,6 @@ git status
 - 私有网络代理地址，例如 `HTTP_PROXY=http://192.168...`；如需本机代理，可手动创建被忽略的 `home/.config/environment.d/proxy.conf`
 - 大型二进制包，例如 Ghostty bundle、Yazi bundle、Codex bundle
 - Oh my tmux 上游仓库不直接提交，由 `install.sh` 在新机器 clone 到 `~/.local/share/oh-my-tmux`
-- Doom Emacs 上游框架不直接提交，由 `install.sh` clone 到 `~/.config/emacs`
+- Doom Emacs 上游框架不直接提交，由 `install.sh` clone 到 `~/.config/emacs`，并把 `~/.emacs.d` 链接到该目录以支持普通 `emacs` 启动
 
 更多需要手动安装的内容见 `packages/manual.md`。

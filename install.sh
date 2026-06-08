@@ -262,6 +262,27 @@ install_doom() {
     if [ -x "$target/bin/doom" ]; then
         ln -sfn -- "$target/bin/doom" "$HOME/.local/bin/doom"
     fi
+    install_doom_emacs_dir_link
+}
+
+install_doom_emacs_dir_link() {
+    local target="$HOME/.config/emacs"
+    local legacy="$HOME/.emacs.d"
+    local resolved_legacy
+    local resolved_target
+
+    resolved_target="$(readlink -f -- "$target" 2>/dev/null || true)"
+    resolved_legacy="$(readlink -f -- "$legacy" 2>/dev/null || true)"
+    if [ -n "$resolved_target" ] && [ "$resolved_legacy" = "$resolved_target" ]; then
+        return
+    fi
+
+    if [ -e "$legacy" ] || [ -L "$legacy" ]; then
+        mkdir -p -- "$backup_dir"
+        mv -- "$legacy" "$backup_dir/.emacs.d"
+    fi
+
+    ln -s -- "$target" "$legacy"
 }
 
 install_neovim_lazy() {
