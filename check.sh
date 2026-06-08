@@ -15,6 +15,7 @@ bash -n \
     "$repo_dir/scripts/install-niri-source.sh" \
     "$repo_dir/scripts/install-xwayland-satellite.sh" \
     "$repo_dir/home/.local/bin/dotfiles-file-manager" \
+    "$repo_dir/home/.local/bin/dotfiles-polkit-agent" \
     "$repo_dir/home/.local/bin/niri-layout" \
     "$repo_dir/home/.local/bin/niri-quit" \
     "$repo_dir/home/.local/bin/power-menu" \
@@ -37,6 +38,7 @@ if command -v shellcheck >/dev/null 2>&1; then
         "$repo_dir/scripts/install-niri-source.sh"
         "$repo_dir/scripts/install-xwayland-satellite.sh"
         "$repo_dir/home/.local/bin/dotfiles-file-manager"
+        "$repo_dir/home/.local/bin/dotfiles-polkit-agent"
         "$repo_dir/home/.local/bin/niri-layout"
         "$repo_dir/home/.local/bin/niri-quit"
         "$repo_dir/home/.local/bin/power-menu"
@@ -79,6 +81,7 @@ python3 -m json.tool "$repo_dir/home/.config/waybar/config-niri" >/dev/null
 
 required_repo_files=(
     "$repo_dir/home/.local/bin/dotfiles-file-manager"
+    "$repo_dir/home/.local/bin/dotfiles-polkit-agent"
     "$repo_dir/home/.local/bin/niri-fullscreen"
     "$repo_dir/home/.local/bin/niri-layout"
     "$repo_dir/home/.local/bin/niri-overview-wallpaper"

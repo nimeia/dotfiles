@@ -283,7 +283,7 @@ spawn-sh-at-startup "wallpaper-random --loop"
 spawn-sh-at-startup "niri-overview-wallpaper --loop"
 
 // PolicyKit authentication dialog for graphical privilege prompts.
-spawn-sh-at-startup "export GTK_A11Y=none; exec /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1"
+spawn-sh-at-startup "exec dotfiles-polkit-agent"
 
 // Bluetooth tray applet and manager.
 spawn-at-startup "systemctl" "--user" "start" "blueman-applet.service"

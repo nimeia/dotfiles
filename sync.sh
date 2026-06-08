@@ -172,6 +172,7 @@ copy_bashrc
 
 mkdir -p -- "$repo_dir/home/.local/bin"
 copy_local_bin_if_exists dotfiles-file-manager
+copy_local_bin_if_exists dotfiles-polkit-agent
 copy_local_bin_if_exists ghostty
 copy_local_bin_if_exists niri-layout
 copy_local_bin_if_exists niri-quit

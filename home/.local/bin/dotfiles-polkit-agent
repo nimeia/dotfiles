@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+uid="$(id -u)"
+
+export GTK_A11Y=none
+
+preferred_agents=(
+    /usr/libexec/polkit-mate-authentication-agent-1
+    /usr/lib/mate-polkit/polkit-mate-authentication-agent-1
+    /usr/libexec/lxqt-policykit-agent
+    /usr/lib/lxqt-policykit/lxqt-policykit-agent
+    /usr/libexec/polkit-kde-authentication-agent-1
+    /usr/lib/polkit-kde-agent-1/polkit-kde-authentication-agent-1
+)
+fallback_agents=(
+    /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1
+)
+
+if pgrep -u "$uid" -f 'polkit-mate-authentication-agent-1|polkit-kde-authentication-agent-1|lxqt-policykit-agent' >/dev/null 2>&1; then
+    exit 0
+fi
+
+for agent in "${preferred_agents[@]}"; do
+    if [ -x "$agent" ]; then
+        pkill -u "$uid" -f '/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1' >/dev/null 2>&1 || true
+        exec "$agent"
+    fi
+done
+
+if pgrep -u "$uid" -f 'polkit-gnome-authentication-agent-1' >/dev/null 2>&1; then
+    exit 0
+fi
+
+for agent in "${fallback_agents[@]}"; do
+    if [ -x "$agent" ]; then
+        exec "$agent"
+    fi
+done
+
+printf 'No PolicyKit authentication agent found.\n' >&2
+exit 1
