@@ -1,26 +1,164 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import json
 import os
-import shlex
-import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
-from typing import Callable
+import socket
+import time
 
 
 APP_ID = "dev.sakura.NiriShortcuts"
 TITLE = "Important Hotkeys"
 HOME = os.path.expanduser("~")
 LOCAL_BIN = os.path.join(HOME, ".local", "bin")
+CONTROL_SOCKET = "niri-shortcuts-grid.sock"
+STARTUP_LOCK = "niri-shortcuts-grid.lock"
+DAEMON_LOCK = "niri-shortcuts-grid.daemon.lock"
+
+
+def runtime_dir() -> str:
+    return os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+
+
+def runtime_path(name: str) -> str:
+    return os.path.join(runtime_dir(), name)
+
+
+def acquire_lock(name: str) -> int | None:
+    lock_path = runtime_path(name)
+    fd: int | None = None
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        return None
+    return fd
+
+
+def acquire_startup_lock() -> int | None:
+    return acquire_lock(STARTUP_LOCK)
+
+
+def control_socket_path() -> str:
+    return runtime_path(CONTROL_SOCKET)
+
+
+def remove_stale_control_socket() -> None:
+    path = control_socket_path()
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+
+
+def send_daemon_command(command: str, timeout: float = 0.15) -> bool:
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(timeout)
+    try:
+        client.connect(control_socket_path())
+        client.sendall(command.encode("utf-8") + b"\n")
+        return True
+    except OSError:
+        remove_stale_control_socket()
+        return False
+    finally:
+        client.close()
+
+
+def start_daemon() -> None:
+    script = os.path.realpath(__file__)
+    subprocess.Popen(
+        (sys.executable or "python3", script, "--daemon"),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def show_via_daemon() -> bool:
+    if send_daemon_command("show"):
+        return True
+
+    start_daemon()
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline:
+        if send_daemon_command("show"):
+            return True
+        time.sleep(0.025)
+    return False
+
+
+_FAST_DAEMON_ATTEMPTED = False
+
+
+def fast_client_entry() -> None:
+    global _FAST_DAEMON_ATTEMPTED
+
+    args = set(sys.argv[1:])
+    if "--quit-daemon" in args:
+        raise SystemExit(0 if send_daemon_command("quit") else 1)
+
+    if args or not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
+        return
+
+    _FAST_DAEMON_ATTEMPTED = True
+    if show_via_daemon():
+        raise SystemExit(0)
+
+
+fast_client_entry()
+
+import atexit
+import fcntl
+import json
+import shlex
+import shutil
+import threading
+from glob import glob
+from dataclasses import dataclass
+from typing import Callable
+
+
+_COMMAND_EXISTS_CACHE: dict[str, bool] = {}
+_NIRI_AVAILABLE: bool | None = None
+
+
+def ensure_niri_socket() -> bool:
+    if os.environ.get("NIRI_SOCKET"):
+        return True
+
+    sockets = glob(os.path.join(runtime_dir(), "niri.*.sock"))
+    if not sockets:
+        return False
+
+    sockets.sort(key=lambda path: os.stat(path).st_mtime, reverse=True)
+    os.environ["NIRI_SOCKET"] = sockets[0]
+    return True
+
+
+def command_available(command: str) -> bool:
+    if command not in _COMMAND_EXISTS_CACHE:
+        _COMMAND_EXISTS_CACHE[command] = shutil.which(command) is not None
+    return _COMMAND_EXISTS_CACHE[command]
+
+
+def niri_available() -> bool:
+    global _NIRI_AVAILABLE
+    if _NIRI_AVAILABLE is None:
+        _NIRI_AVAILABLE = ensure_niri_socket() and command_available("niri")
+    return _NIRI_AVAILABLE
 
 
 @dataclass(frozen=True)
 class Hotkey:
     key: str
     label: str
+    command_key: str | None = None
     argv: tuple[str, ...] | None = None
     shell: str | None = None
     niri_action: tuple[str, ...] | None = None
@@ -28,43 +166,50 @@ class Hotkey:
     requires_target: bool = False
 
 
+@dataclass(frozen=True)
+class ShortcutsWindow:
+    window: object
+    present: Callable[[int | None], None]
+    close: Callable[[], None]
+
+
 GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
     (
         "启动与系统",
         (
-            Hotkey("Mod Shift /", "打开本提示", argv=(os.path.join(LOCAL_BIN, "niri-shortcuts-grid"),)),
-            Hotkey("Mod Enter / T", "打开终端", argv=("ghostty",)),
-            Hotkey("Mod S / R", "搜索或运行应用", argv=("fuzzel",)),
-            Hotkey("Mod E", "打开默认文件管理器", argv=(os.path.join(LOCAL_BIN, "dotfiles-file-manager"), HOME)),
-            Hotkey("Mod Alt E", "打开终端文件管理器", argv=("ghostty", "-e", os.path.join(LOCAL_BIN, "yazi"), HOME)),
-            Hotkey("Mod I", "设置菜单", argv=(os.path.join(LOCAL_BIN, "niri-settings-menu"),)),
-            Hotkey("Mod P", "显示设置", argv=("wdisplays",)),
-            Hotkey("Mod L", "锁屏", argv=(os.path.join(LOCAL_BIN, "screen-lock"),)),
-            Hotkey("Mod B", "显示或隐藏 Waybar", argv=("killall", "-SIGUSR1", "waybar")),
-            Hotkey("Mod X / Shift Q", "电源菜单", argv=("power-menu",)),
+            Hotkey("Super / Mod Shift /", "打开本提示", argv=(os.path.join(LOCAL_BIN, "niri-shortcuts-grid"),)),
+            Hotkey("Mod Enter / T", "打开终端", "t", argv=("ghostty",)),
+            Hotkey("Mod S / R", "搜索或运行应用", "s", argv=("fuzzel",)),
+            Hotkey("Mod E", "打开默认文件管理器", "e", argv=(os.path.join(LOCAL_BIN, "dotfiles-file-manager"), HOME)),
+            Hotkey("Mod Alt E", "打开终端文件管理器", "y", argv=("ghostty", "-e", os.path.join(LOCAL_BIN, "yazi"), HOME)),
+            Hotkey("Mod I", "设置菜单", "i", argv=(os.path.join(LOCAL_BIN, "niri-settings-menu"),)),
+            Hotkey("Mod P", "显示设置", "p", argv=("wdisplays",)),
+            Hotkey("Mod L", "锁屏", "z", argv=(os.path.join(LOCAL_BIN, "screen-lock"),)),
+            Hotkey("Mod B", "显示或隐藏 Waybar", "b", argv=("killall", "-SIGUSR1", "waybar")),
+            Hotkey("Mod X / Shift Q", "电源菜单", "x", argv=("power-menu",)),
         ),
     ),
     (
         "窗口",
         (
-            Hotkey("Alt F4 / Mod Q", "关闭当前窗口", niri_action=("close-window",), focus_target=True, requires_target=True),
-            Hotkey("Mod F", "最大化当前列", niri_action=("maximize-column",), focus_target=True, requires_target=True),
-            Hotkey("Mod Shift F", "全屏当前窗口", argv=("niri-fullscreen", "--toggle"), focus_target=True, requires_target=True),
-            Hotkey("Mod M / Up", "最大化到屏幕边缘", niri_action=("maximize-window-to-edges",), focus_target=True, requires_target=True),
-            Hotkey("Mod V", "切换浮动或平铺", niri_action=("toggle-window-floating",), focus_target=True, requires_target=True),
+            Hotkey("Alt F4 / Mod Q", "关闭当前窗口", "q", niri_action=("close-window",), focus_target=True, requires_target=True),
+            Hotkey("Mod F", "最大化当前列", "f", niri_action=("maximize-column",), focus_target=True, requires_target=True),
+            Hotkey("Mod Shift F", "全屏当前窗口", "g", argv=("niri-fullscreen", "--toggle"), focus_target=True, requires_target=True),
+            Hotkey("Mod M / Up", "最大化到屏幕边缘", "m", niri_action=("maximize-window-to-edges",), focus_target=True, requires_target=True),
+            Hotkey("Mod V", "切换浮动或平铺", "v", niri_action=("toggle-window-floating",), focus_target=True, requires_target=True),
             Hotkey("Mod Shift V", "切换浮动/平铺焦点", niri_action=("switch-focus-between-floating-and-tiling",), focus_target=True, requires_target=True),
-            Hotkey("Mod W", "切换列标签页", niri_action=("toggle-column-tabbed-display",), focus_target=True, requires_target=True),
-            Hotkey("Mod C", "居中当前列", niri_action=("center-column",), focus_target=True, requires_target=True),
-            Hotkey("Waybar ◐", "切换当前程序透明度", argv=("window-opacity", "--toggle"), focus_target=True, requires_target=True),
+            Hotkey("Mod W", "切换列标签页", "w", niri_action=("toggle-column-tabbed-display",), focus_target=True, requires_target=True),
+            Hotkey("Mod C", "居中当前列", "c", niri_action=("center-column",), focus_target=True, requires_target=True),
+            Hotkey("Waybar ◐", "切换当前程序透明度", "o", argv=("window-opacity", "--toggle"), focus_target=True, requires_target=True),
         ),
     ),
     (
         "聚焦与移动",
         (
-            Hotkey("Mod Left / Alt H", "聚焦左侧列", niri_action=("focus-column-left",), focus_target=True, requires_target=True),
-            Hotkey("Mod Right / Alt L", "聚焦右侧列", niri_action=("focus-column-right",), focus_target=True, requires_target=True),
-            Hotkey("Mod Alt J", "聚焦下方窗口", niri_action=("focus-window-down",), focus_target=True, requires_target=True),
-            Hotkey("Mod Alt K", "聚焦上方窗口", niri_action=("focus-window-up",), focus_target=True, requires_target=True),
+            Hotkey("Mod Left / Alt H", "聚焦左侧列", "h", niri_action=("focus-column-left",), focus_target=True, requires_target=True),
+            Hotkey("Mod Right / Alt L", "聚焦右侧列", "l", niri_action=("focus-column-right",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt J", "聚焦下方窗口", "j", niri_action=("focus-window-down",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt K", "聚焦上方窗口", "k", niri_action=("focus-window-up",), focus_target=True, requires_target=True),
             Hotkey("Mod Alt Left / Ctrl Alt H", "左移当前列", niri_action=("move-column-left",), focus_target=True, requires_target=True),
             Hotkey("Mod Alt Right / Ctrl Alt L", "右移当前列", niri_action=("move-column-right",), focus_target=True, requires_target=True),
             Hotkey("Mod Alt Down / Ctrl Alt J", "下移窗口", niri_action=("move-window-down",), focus_target=True, requires_target=True),
@@ -74,9 +219,9 @@ GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
     (
         "工作区与显示器",
         (
-            Hotkey("Mod D / Tab / O", "打开或关闭概览", niri_action=("toggle-overview",), focus_target=True),
-            Hotkey("Mod Ctrl Right / U", "下一个工作区", niri_action=("focus-workspace-down",), focus_target=True),
-            Hotkey("Mod Ctrl Left / Y", "上一个工作区", niri_action=("focus-workspace-up",), focus_target=True),
+            Hotkey("Mod D / Tab / O", "打开或关闭概览", "d", niri_action=("toggle-overview",), focus_target=True),
+            Hotkey("Mod Ctrl Right / U", "下一个工作区", "n", niri_action=("focus-workspace-down",), focus_target=True),
+            Hotkey("Mod Ctrl Left / Y", "上一个工作区", "r", niri_action=("focus-workspace-up",), focus_target=True),
             Hotkey("Mod Ctrl Shift Right / Mod Ctrl U", "移动列到下个工作区", niri_action=("move-column-to-workspace-down",), focus_target=True, requires_target=True),
             Hotkey("Mod Ctrl Shift Left / Mod Ctrl Y", "移动列到上个工作区", niri_action=("move-column-to-workspace-up",), focus_target=True, requires_target=True),
             Hotkey("Mod Shift Alt Left / H", "聚焦左侧显示器", niri_action=("focus-monitor-left",), focus_target=True),
@@ -87,7 +232,7 @@ GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
     (
         "尺寸与布局",
         (
-            Hotkey("Mod Alt R", "切换预设列宽", niri_action=("switch-preset-column-width",), focus_target=True, requires_target=True),
+            Hotkey("Mod Alt R", "切换预设列宽", "u", niri_action=("switch-preset-column-width",), focus_target=True, requires_target=True),
             Hotkey("Mod Alt Shift R", "反向切换列宽", niri_action=("switch-preset-column-width-back",), focus_target=True, requires_target=True),
             Hotkey("Mod Ctrl Shift R", "切换预设窗口高度", niri_action=("switch-preset-window-height",), focus_target=True, requires_target=True),
             Hotkey("Mod Ctrl R", "重置窗口高度", niri_action=("reset-window-height",), focus_target=True, requires_target=True),
@@ -106,7 +251,7 @@ GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
     (
         "工具与媒体",
         (
-            Hotkey("Print / Mod Shift S", "截图", niri_action=("screenshot",)),
+            Hotkey("Print / Mod Shift S", "截图", "a", niri_action=("screenshot",)),
             Hotkey("Ctrl Print / Mod Ctrl Shift S", "截取屏幕", niri_action=("screenshot-screen",)),
             Hotkey("Alt Print / Mod Alt Shift S", "截取当前窗口", niri_action=("screenshot-window",), focus_target=True, requires_target=True),
             Hotkey("Audio +", "提高音量", shell="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ -l 1.0"),
@@ -116,10 +261,60 @@ GROUPS: tuple[tuple[str, tuple[Hotkey, ...]], ...] = (
             Hotkey("Media Play", "播放或暂停", shell="playerctl play-pause"),
             Hotkey("Media Prev", "上一首", shell="playerctl previous"),
             Hotkey("Media Next", "下一首", shell="playerctl next"),
-            Hotkey("Mod Ctrl Shift /", "niri 原生提示", niri_action=("show-hotkey-overlay",)),
+            Hotkey("Mod Ctrl Shift /", "niri 原生提示", "?", niri_action=("show-hotkey-overlay",)),
         ),
     ),
 )
+
+
+def normalize_command_key(key: str) -> str:
+    aliases = {
+        "return": "enter",
+        "kp_enter": "enter",
+        "space": "space",
+        "slash": "/",
+        "question": "?",
+        "minus": "-",
+        "equal": "=",
+        "period": ".",
+        "comma": ",",
+        "semicolon": ";",
+        "bracketleft": "[",
+        "bracketright": "]",
+    }
+    lowered = key.casefold()
+    return aliases.get(lowered, lowered)
+
+
+def command_key_label(key: str | None) -> str:
+    if not key:
+        return ""
+
+    normalized = normalize_command_key(key)
+    labels = {
+        "enter": "Enter",
+        "space": "Space",
+        "left": "Left",
+        "right": "Right",
+        "up": "Up",
+        "down": "Down",
+    }
+    if normalized in labels:
+        return labels[normalized]
+    if len(normalized) == 1:
+        return normalized.upper()
+    return normalized
+
+
+def keyval_to_command_key(Gdk: object, keyval: int) -> str | None:
+    name = Gdk.keyval_name(keyval)
+    if not name:
+        return None
+
+    if len(name) == 1:
+        return name.casefold()
+
+    return normalize_command_key(name)
 
 
 def print_plain() -> None:
@@ -128,12 +323,14 @@ def print_plain() -> None:
     for group, items in GROUPS:
         print(group)
         for item in items:
-            print(f"  {item.key:<20} {item.label}")
+            command = command_key_label(item.command_key)
+            prefix = f"{command:<5}" if command else " " * 5
+            print(f"  {prefix} {item.key:<20} {item.label}")
         print()
 
 
 def command_exists(argv: tuple[str, ...] | None) -> bool:
-    return not argv or shutil.which(argv[0]) is not None
+    return not argv or command_available(argv[0])
 
 
 def shell_command_exists(command: str | None) -> bool:
@@ -145,7 +342,7 @@ def shell_command_exists(command: str | None) -> bool:
     except ValueError:
         return True
 
-    return not parts or shutil.which(parts[0]) is not None
+    return not parts or command_available(parts[0])
 
 
 def unavailable_reason(item: Hotkey, target_id: int | None) -> str | None:
@@ -158,7 +355,7 @@ def unavailable_reason(item: Hotkey, target_id: int | None) -> str | None:
     if item.shell and not shell_command_exists(item.shell):
         return f"找不到命令：{shlex.split(item.shell)[0]}"
 
-    if item.niri_action and (not os.environ.get("NIRI_SOCKET") or not shutil.which("niri")):
+    if item.niri_action and not niri_available():
         return "niri 会话不可用"
 
     return None
@@ -173,7 +370,7 @@ def run_quiet(argv: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
 
 
 def focused_window_id() -> int | None:
-    if not os.environ.get("NIRI_SOCKET") or not shutil.which("niri"):
+    if not niri_available():
         return None
 
     result = run_quiet(("niri", "msg", "-j", "focused-window"))
@@ -196,7 +393,7 @@ def focused_window_id() -> int | None:
 
 
 def shortcut_window_ids() -> list[int]:
-    if not os.environ.get("NIRI_SOCKET") or not shutil.which("niri"):
+    if not niri_available():
         return []
 
     result = run_quiet(("niri", "msg", "-j", "windows"))
@@ -231,12 +428,6 @@ def focus_window(window_id: int | None) -> bool:
     return run_quiet(("niri", "msg", "action", "focus-window", "--id", str(window_id))).returncode == 0
 
 
-def place_shortcuts_window(window_id: int) -> None:
-    run_quiet(("niri", "msg", "action", "set-window-width", "--id", str(window_id), "1040"))
-    run_quiet(("niri", "msg", "action", "set-window-height", "--id", str(window_id), "720"))
-    run_quiet(("niri", "msg", "action", "center-window", "--id", str(window_id)))
-
-
 def focus_existing_shortcuts() -> bool:
     ids = shortcut_window_ids()
     if not ids:
@@ -247,12 +438,20 @@ def focus_existing_shortcuts() -> bool:
 
     current_id = ids[-1]
     focus_window(current_id)
-    place_shortcuts_window(current_id)
     return True
 
 
+def wait_for_existing_shortcuts(timeout: float = 0.6) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if focus_existing_shortcuts():
+            return True
+        time.sleep(0.025)
+    return focus_existing_shortcuts()
+
+
 def niri_action(action: tuple[str, ...], target_id: int | None, requires_target: bool) -> bool:
-    if not shutil.which("niri"):
+    if not niri_available():
         return False
 
     if target_id is not None:
@@ -309,8 +508,8 @@ def load_gtk() -> tuple[object, object, object, object, object]:
     return Gtk, Gdk, Gio, GLib, Pango
 
 
-def build_ui(app: object, target_id: int | None) -> None:
-    Gtk, Gdk, _Gio, GLib, Pango = load_gtk()
+def build_ui(app: object, target_id: int | None, persistent: bool = False) -> ShortcutsWindow:
+    Gtk, Gdk, _Gio, _GLib, Pango = load_gtk()
 
     css = """
     window {
@@ -364,6 +563,16 @@ def build_ui(app: object, target_id: int | None) -> None:
       padding: 4px 7px;
       min-width: 150px;
     }
+    .command-keycap {
+      background: #f38ba8;
+      border-radius: 6px;
+      color: #11111b;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 4px 7px;
+      min-width: 26px;
+    }
     .action-label {
       color: #cdd6f4;
       font-size: 13px;
@@ -384,12 +593,62 @@ def build_ui(app: object, target_id: int | None) -> None:
     window.set_default_size(1040, 720)
     window.set_resizable(True)
 
+    target_state = {"id": target_id}
+    commands_state: dict[str, dict[str, Hotkey]] = {"value": {}}
+    row_states: list[tuple[Hotkey, object]] = []
+    seen_active = {"value": False}
+
+    def close_window() -> None:
+        seen_active["value"] = False
+        if persistent:
+            window.set_visible(False)
+        else:
+            window.close()
+
+    def on_close_request(_window: object) -> bool:
+        if persistent:
+            close_window()
+            return True
+        return False
+
+    window.connect("close-request", on_close_request)
+
+    def update_row_state(row: object, reason: str | None) -> None:
+        if reason:
+            row.add_css_class("disabled-row")
+            row.set_sensitive(False)
+            row.set_tooltip_text(reason)
+        else:
+            row.remove_css_class("disabled-row")
+            row.set_sensitive(True)
+            row.set_tooltip_text(None)
+
+    def refresh_target(new_target_id: int | None) -> None:
+        target_state["id"] = new_target_id
+        commands: dict[str, Hotkey] = {}
+        for item, row in row_states:
+            reason = unavailable_reason(item, new_target_id)
+            update_row_state(row, reason)
+            if item.command_key and not reason:
+                commands.setdefault(normalize_command_key(item.command_key), item)
+        commands_state["value"] = commands
+
+    def present_window(new_target_id: int | None) -> None:
+        seen_active["value"] = False
+        refresh_target(new_target_id)
+        window.present()
+
     key_controller = Gtk.EventControllerKey()
     key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
 
     def on_key_pressed(_controller: object, keyval: int, _keycode: int, _state: object) -> bool:
         if keyval == Gdk.KEY_Escape:
-            window.close()
+            close_window()
+            return True
+        command = keyval_to_command_key(Gdk, keyval)
+        item = commands_state["value"].get(command or "")
+        if item:
+            hotkey_runner(item, target_state["id"], close_window)()
             return True
         return False
 
@@ -425,11 +684,6 @@ def build_ui(app: object, target_id: int | None) -> None:
     grid.set_row_spacing(8)
     scroller.set_child(grid)
 
-    def close_window() -> None:
-        window.close()
-
-    seen_active = {"value": False}
-
     def on_active_changed(_window: object, _param: object) -> None:
         if window.is_active():
             seen_active["value"] = True
@@ -450,15 +704,20 @@ def build_ui(app: object, target_id: int | None) -> None:
         for item in items:
             row = Gtk.Button()
             row.add_css_class("hotkey-row")
-            reason = unavailable_reason(item, target_id)
-            if reason:
-                row.add_css_class("disabled-row")
-                row.set_sensitive(False)
-                row.set_tooltip_text(reason)
+            row_states.append((item, row))
+            update_row_state(row, unavailable_reason(item, target_id))
 
             content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             content.set_hexpand(True)
             row.set_child(content)
+
+            command = Gtk.Label(label=command_key_label(item.command_key))
+            command.add_css_class("command-keycap")
+            command.set_xalign(0.5)
+            command.set_tooltip_text("窗口打开后可直接按这个键执行")
+            if not item.command_key:
+                command.set_opacity(0)
+            content.append(command)
 
             key = Gtk.Label(label=item.key)
             key.add_css_class("keycap")
@@ -477,36 +736,128 @@ def build_ui(app: object, target_id: int | None) -> None:
             label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
             content.append(label)
 
-            runner = hotkey_runner(item, target_id, close_window)
-            row.connect("clicked", lambda _button, callback=runner: callback())
+            row.connect("clicked", lambda _button, hotkey=item: hotkey_runner(hotkey, target_state["id"], close_window)())
             card.append(row)
 
         grid.attach(card, index % 3, index // 3, 1, 1)
 
-    window.present()
+    refresh_target(target_id)
+    return ShortcutsWindow(window=window, present=present_window, close=close_window)
 
-    if os.environ.get("NIRI_SOCKET") and shutil.which("niri"):
-        attempts = {"left": 10}
 
-        def place_presented_window() -> bool:
-            ids = shortcut_window_ids()
-            if ids:
-                place_shortcuts_window(ids[-1])
-                return False
+def run_daemon() -> int:
+    if not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
+        return 1
 
-            attempts["left"] -= 1
-            return attempts["left"] > 0
+    daemon_lock = acquire_lock(DAEMON_LOCK)
+    if daemon_lock is None:
+        return 0
 
-        GLib.timeout_add(50, place_presented_window)
+    Gtk, _Gdk, Gio, GLib, _Pango = load_gtk()
+    app = Gtk.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
+    controller: dict[str, ShortcutsWindow | None] = {"value": None}
+    stop_event = threading.Event()
+    server_socket: dict[str, socket.socket | None] = {"value": None}
+
+    def show_window() -> bool:
+        target_id = focused_window_id()
+        if controller["value"] is None:
+            controller["value"] = build_ui(app, target_id, persistent=True)
+        controller["value"].present(target_id)
+        return False
+
+    def preload_window() -> bool:
+        if controller["value"] is None:
+            controller["value"] = build_ui(app, None, persistent=True)
+        return False
+
+    def shutdown() -> bool:
+        app.quit()
+        return False
+
+    def cleanup() -> None:
+        stop_event.set()
+        server = server_socket["value"]
+        if server is not None:
+            try:
+                server.close()
+            except OSError:
+                pass
+        remove_stale_control_socket()
+
+    def handle_client(conn: socket.socket) -> None:
+        try:
+            data = conn.recv(1024).decode("utf-8", errors="replace").strip()
+        except OSError:
+            return
+
+        if data == "show":
+            GLib.idle_add(show_window)
+        elif data == "quit":
+            GLib.idle_add(shutdown)
+
+    def serve() -> None:
+        remove_stale_control_socket()
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server_socket["value"] = server
+        try:
+            server.bind(control_socket_path())
+            os.chmod(control_socket_path(), 0o600)
+            server.listen(16)
+            server.settimeout(0.5)
+            while not stop_event.is_set():
+                try:
+                    conn, _addr = server.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+
+                with conn:
+                    handle_client(conn)
+        finally:
+            try:
+                server.close()
+            except OSError:
+                pass
+            remove_stale_control_socket()
+
+    def on_startup(_app: object) -> None:
+        threading.Thread(target=serve, daemon=True).start()
+        GLib.idle_add(preload_window)
+
+    atexit.register(cleanup)
+    app.hold()
+    app.connect("startup", on_startup)
+    app.connect("activate", lambda _app: None)
+    app.connect("shutdown", lambda _app: cleanup())
+    return app.run((sys.argv[0],))
 
 
 def main() -> int:
+    if "--quit-daemon" in sys.argv:
+        return 0 if send_daemon_command("quit") else 1
+
+    if "--daemon" in sys.argv:
+        return run_daemon()
+
     if "--print" in sys.argv:
         print_plain()
         return 0
 
     if not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
         print_plain()
+        return 0
+
+    if not _FAST_DAEMON_ATTEMPTED and show_via_daemon():
+        return 0
+
+    if focus_existing_shortcuts():
+        return 0
+
+    startup_lock = acquire_startup_lock()
+    if startup_lock is None:
+        wait_for_existing_shortcuts()
         return 0
 
     if focus_existing_shortcuts():
@@ -516,7 +867,7 @@ def main() -> int:
     target_id = focused_window_id()
 
     app = Gtk.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
-    app.connect("activate", lambda gtk_app: build_ui(gtk_app, target_id))
+    app.connect("activate", lambda gtk_app: build_ui(gtk_app, target_id).present(target_id))
     return app.run(sys.argv)
 
 

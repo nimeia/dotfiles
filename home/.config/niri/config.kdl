@@ -288,6 +288,9 @@ spawn-sh-at-startup "exec dotfiles-polkit-agent"
 // Bluetooth tray applet and manager.
 spawn-at-startup "systemctl" "--user" "start" "blueman-applet.service"
 
+// Preload the custom shortcuts panel so Super opens it without cold-starting GTK.
+spawn-sh-at-startup "niri-shortcuts-grid --daemon"
+
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
 // spawn-sh-at-startup "qs -c ~/source/qs/MyAwesomeShell"
 
@@ -423,6 +426,7 @@ window-rule {
     match app-id=r#"^dev\.sakura\.NiriShortcuts$"#
 
     open-floating true
+    open-focused true
     geometry-corner-radius 14
     clip-to-geometry true
 }
@@ -446,6 +450,8 @@ binds {
 
     // Mod-Shift-/, which is usually the same as Mod-?,
     // shows a list of important hotkeys.
+    Super_L repeat=false allow-inhibiting=false hotkey-overlay-title="打开快捷键命令窗口" { spawn "niri-shortcuts-grid"; }
+    Super_R repeat=false allow-inhibiting=false hotkey-overlay-title="打开快捷键命令窗口" { spawn "niri-shortcuts-grid"; }
     Mod+Shift+Slash hotkey-overlay-title="显示平铺快捷键帮助" { spawn "niri-shortcuts-grid"; }
     Mod+Ctrl+Shift+Slash hotkey-overlay-title="显示 niri 原生快捷键帮助" { show-hotkey-overlay; }
 
