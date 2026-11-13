@@ -6,7 +6,7 @@
 - greetd + tuigreet 登录配置模板
 - Waybar/Owlphin 主题和电源菜单入口
 - wlogout 电源菜单主题
-- fcitx5 拼音 + 五笔输入法配置
+- fcitx5 拼音、五笔和五笔拼音混合输入
 - fuzzel、mako、ghostty、NvChad、默认终端配置
 - tmux + Oh my tmux 本地覆盖配置
 - Emacs pgtk + Doom Emacs 私人配置
@@ -113,11 +113,34 @@ swww/swww-daemon、Nerd Font Symbols、轻量壁纸集合，以及 apt 中可用
 ./install.sh --niri-source
 ```
 
-这一步依赖 `--packages` 里的 Rust 和 niri 构建依赖。需要指定版本时可以追加 ref，例如：
+这一步依赖 `--packages` 里的 Rust 和 niri 构建依赖。默认构建 `packages/niri-ref.txt` 固定的
+上游提交。当前固定到 2026-10-15 的 `main` 提交 `45739bc072f9875a674d335ae724f10d3b35c665`，
+包含 [PR #4548](https://github.com/niri-wm/niri/pull/4548) 的虚拟键盘快捷键与 keymap 修复。
+这样 Lan Mouse 注入的 `Mod+T`、`Mod+E` 等组合键可以由 niri 原生处理。
+
+已有机器升级可执行：
+
+```bash
+./install.sh --niri-source
+```
+
+安装会先用新二进制校验仓库中的 niri 配置，再替换系统二进制。已有桌面会话继续运行旧进程，
+注销并重新登录后启用新版本。`bootstrap.sh` 也会比较已安装版本中的 commit，按需升级到固定提交。
+
+需要覆盖固定版本时可以追加 ref，例如：
 
 ```bash
 ./install.sh --niri-source --ref v26.04
+./install.sh --niri-source --ref main
+./install.sh --niri-source --ref latest
 ```
+
+`main` 每次获取分支最新提交；`latest` 获取最新正式 release。也可以给 `bootstrap.sh` 传
+`--niri-ref <ref>`，或通过 `NIRI_REF` 覆盖。旧的正式版可能不包含虚拟键盘修复。
+
+快捷键命令面板使用 `Mod+Shift+/` 或 Waybar 上的快捷键按钮打开。配置不再绑定裸 `Super_L/R`，
+以免输入原生组合键时先弹出面板。已有的 `lan-mouse-niri` 定制接收端仍可保留单击 Win/Super
+打开面板的功能；它的服务与源码由独立仓库管理。
 
 4. 安装用户配置和系统登录模板：
 
@@ -214,6 +237,42 @@ git push -u origin main
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 ```
+
+## 中文输入法
+
+单按右 Shift 在英文和当前中文输入法之间切换；按住 Shift 输入大写字母仍正常。中文状态下，
+`Ctrl+左 Shift` 和 `Ctrl+右 Shift` 分别向前和向后切换中文输入法。默认仍是五笔，也可以选「五笔拼音」：
+在同一个输入法里直接输入五笔编码或完整拼音，无需加前缀。原有五笔和独立拼音都保留。
+
+## 跨机剪贴板
+
+Lan Mouse 负责键鼠共享，没有内置剪贴板内容传输。niri 的虚拟组合键修复也不会自动同步
+Windows 和 Linux 的剪贴板。文本、图片和文件同步使用独立的
+[CrossPaste](https://github.com/CrossPaste/crosspaste-desktop/releases/tag/2.3.1.2781)。
+当前部署版本为 2.3.1（build 2781），包含原生 Wayland 剪贴板写入修复，可以与 Lan Mouse 同时运行。
+
+两端安装后，在设备页面通过目标设备显示的配对码建立信任，开启双向发送与接收，以及文本、图片、
+文件同步。多网卡机器应选择连接对方设备的局域网网卡；设备发现依赖 mDNS，TCP 端口默认是 13129。
+配对信息、剪贴板历史和文件缓存保存在各机器的 CrossPaste 数据目录中，不纳入 dotfiles。
+
+可通过 CrossPaste CLI 检查设备状态和启用加密同步：
+
+```bash
+crosspaste --json devices
+crosspaste config set enableEncryptSync true
+```
+
+Ubuntu 当前使用 `crosspaste.service` 用户服务随图形会话启动；这项可选软件及其服务不由
+`bootstrap.sh` 自动安装。Windows 使用 CrossPaste 自身的登录启动设置。
+
+```bash
+systemctl --user status crosspaste.service
+journalctl --user -u crosspaste.service -n 30
+```
+
+文件同步会传输实际文件，默认文件大小限制为 512 MB，可在 CrossPaste 设置中调整。
+在文件管理器或编辑器中使用 `Ctrl+C` / `Ctrl+V`；Ghostty 等 Linux 终端使用
+`Ctrl+Shift+C` / `Ctrl+Shift+V`。
 
 ## 日常更新
 

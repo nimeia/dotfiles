@@ -1,18 +1,19 @@
 [Hotkey]
-# Pressing the toggle key repeatedly can cycle through configured input methods.
+# Pressing Space repeatedly while holding Ctrl can cycle through input methods.
 EnumerateWithTriggerKeys=True
 # Keep keyboard-us as English fallback; skip it while cycling Chinese IMs.
 EnumerateSkipFirst=True
 # Modifier-only shortcuts such as Shift_R must be released within this window.
 ModifierOnlyKeyTimeout=250
+# Disable the temporary toggle, which only works after a Chinese IM is active.
+AltTriggerKeys=
 
 [Hotkey/TriggerKeys]
 0=Control+space
 1=Zenkaku_Hankaku
 2=Hangul
-
-[Hotkey/AltTriggerKeys]
-0=Shift_R
+# Tap Right Shift to toggle the current Chinese input method from either state.
+3=Shift_R
 
 [Hotkey/EnumerateForwardKeys]
 0=Control+Shift_L

@@ -79,6 +79,12 @@ python3 -m json.tool "$repo_dir/home/.config/waybar/config-common" >/dev/null
 python3 -m json.tool "$repo_dir/home/.config/waybar/config-common-tiling" >/dev/null
 python3 -m json.tool "$repo_dir/home/.config/waybar/config-niri" >/dev/null
 
+if ! grep -qxE '[0-9a-f]{40}' "$repo_dir/packages/niri-ref.txt" ||
+    [ "$(wc -l < "$repo_dir/packages/niri-ref.txt")" -ne 1 ]; then
+    printf 'packages/niri-ref.txt must contain one full niri commit hash.\n' >&2
+    exit 1
+fi
+
 required_repo_files=(
     "$repo_dir/home/.local/bin/dotfiles-file-manager"
     "$repo_dir/home/.local/bin/dotfiles-polkit-agent"

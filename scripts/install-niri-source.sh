@@ -8,7 +8,7 @@ repo_dir="$(cd -- "$script_dir/.." && pwd)"
 . "$repo_dir/scripts/lib/apt.sh"
 
 niri_repo="https://github.com/niri-wm/niri.git"
-niri_ref="${NIRI_REF:-}"
+niri_ref="${NIRI_REF:-$(cat "$repo_dir/packages/niri-ref.txt")}"
 source_dir="${NIRI_SOURCE_DIR:-$HOME/.local/src/niri}"
 skip_deps=0
 build_only=0
@@ -22,8 +22,9 @@ Usage: scripts/install-niri-source.sh [options]
 Build and install niri from source.
 
 Options:
-  --ref REF          Git ref to build, such as v26.04, main, or a commit.
-                     Defaults to the latest GitHub release tag.
+  --ref REF          Git ref to build: a tag, main, a full commit, or latest.
+                     Defaults to the commit in packages/niri-ref.txt.
+                     latest resolves the latest GitHub release tag.
   --repo URL         Source repository URL. Defaults to niri-wm/niri.
   --source-dir DIR   Checkout directory. Defaults to ~/.local/src/niri.
   --skip-deps        Do not install apt build/runtime dependencies.
@@ -174,7 +175,7 @@ install_dependencies() {
 }
 
 resolve_ref() {
-    if [ -n "$niri_ref" ]; then
+    if [ "$niri_ref" != "latest" ]; then
         printf '%s\n' "$niri_ref"
         return
     fi
@@ -212,15 +213,10 @@ resolve_ref() {
 clone_source() {
     local ref="$1"
 
-    log "clone niri source"
-    mkdir -p -- "$(dirname -- "$source_dir")"
-    if git_remote clone --depth 1 --branch "$ref" "$niri_repo" "$source_dir"; then
-        return
-    fi
-
-    warn "shallow clone failed; retrying with blob filtering"
-    rm -rf -- "$source_dir"
-    git_remote clone --filter=blob:none "$niri_repo" "$source_dir"
+    log "initialize niri source checkout for $ref"
+    mkdir -p -- "$source_dir"
+    git -C "$source_dir" init -q
+    git -C "$source_dir" remote add origin "$niri_repo"
 }
 
 prepare_source() {
@@ -232,8 +228,6 @@ prepare_source() {
             warn "existing niri source checkout is incomplete; recloning"
             rm -rf -- "$source_dir"
             clone_source "$ref"
-        elif ! git_remote -C "$source_dir" fetch --tags --prune --depth 1 origin "$ref"; then
-            git_remote -C "$source_dir" fetch --tags --prune origin
         fi
     elif [ -e "$source_dir" ]; then
         if [ "$force" -eq 1 ]; then
@@ -247,8 +241,14 @@ prepare_source() {
         clone_source "$ref"
     fi
 
-    log "checkout niri ref: $ref"
-    git -C "$source_dir" checkout --detach "$ref"
+    if [ -n "$(git -C "$source_dir" status --porcelain)" ]; then
+        die "$source_dir has local changes; save them before upgrading niri"
+    fi
+
+    git -C "$source_dir" remote set-url origin "$niri_repo"
+    git_remote -C "$source_dir" fetch --prune --depth 1 origin "$ref"
+    log "checkout fetched niri ref: $ref"
+    git -C "$source_dir" checkout --detach FETCH_HEAD
 }
 
 build_niri() {
@@ -279,8 +279,12 @@ install_niri() {
     local binary="$source_dir/target/release/niri"
     [ -x "$binary" ] || die "built niri binary not found: $binary"
 
+    log "validate tracked config with the new niri binary"
+    "$binary" validate -c "$repo_dir/home/.config/niri/config.kdl"
+
     log "install niri binary and upstream resources"
-    sudo install -D -m 0755 "$binary" /usr/local/bin/niri
+    sudo install -D -m 0755 "$binary" /usr/local/bin/niri.new
+    sudo mv -f -- /usr/local/bin/niri.new /usr/local/bin/niri
 
     install_if_exists 0755 "$source_dir/resources/niri-session" /usr/local/bin/niri-session.upstream
     install_if_exists 0644 "$source_dir/resources/niri.desktop" /usr/local/share/wayland-sessions/niri.desktop

@@ -13,7 +13,7 @@ skip_check=0
 with_doom=1
 profile="${DOTFILES_PROFILE:-auto}"
 detected_base="unknown"
-niri_ref="${NIRI_REF:-}"
+niri_ref="${NIRI_REF:-$(cat "$repo_dir/packages/niri-ref.txt")}"
 sudo_ready=0
 ran_steps=0
 
@@ -30,7 +30,8 @@ Options:
                       auto uses desktop when ubuntu-desktop is installed.
   --with-doom         Run Doom Emacs install after the desktop is configured.
   --skip-doom         Do not install or sync Doom Emacs packages/env.
-  --niri-ref REF      Build a specific niri ref, such as v26.04 or a commit.
+  --niri-ref REF      Override packages/niri-ref.txt with a tag, main, a full
+                      commit, or latest (the latest release).
   --skip-packages     Do not install apt packages or base tool shims.
   --skip-external     Do not install Chrome/Yazi/swww/fonts/wallpapers.
   --skip-niri-source  Do not build or install niri from source.
@@ -384,6 +385,20 @@ user_config_ready() {
     done
 }
 
+niri_source_ready() {
+    local installed_version
+
+    [ -x /usr/local/bin/niri ] || return 1
+    installed_version="$(/usr/local/bin/niri --version)" || return 1
+    if [[ "$niri_ref" =~ ^[[:xdigit:]]{40}$ &&
+        "$installed_version" =~ \(([[:xdigit:]]{7,40})\)$ ]]; then
+        [[ "$niri_ref" == "${BASH_REMATCH[1]}"* ]]
+    else
+        # Moving branches and release aliases must be resolved by the installer.
+        return 1
+    fi
+}
+
 system_templates_ready() {
     [ -x /usr/local/bin/niri ] || return 1
     [ -x /usr/local/bin/niri-session ] || return 1
@@ -526,14 +541,14 @@ else
 fi
 
 if [ "$skip_niri_source" -eq 0 ]; then
-    if [ -n "$niri_ref" ] || [ ! -x /usr/local/bin/niri ]; then
+    if ! niri_source_ready; then
         niri_args=(--niri-source)
         if [ -n "$niri_ref" ]; then
             niri_args+=(--ref "$niri_ref")
         fi
         run_step "build and install niri from source" 1 "$repo_dir/install.sh" "${niri_args[@]}"
     else
-        log "niri already installed at /usr/local/bin/niri"
+        log "the pinned niri commit is already installed at /usr/local/bin/niri"
     fi
 else
     warn "skipping niri source build by request"
